@@ -35,6 +35,7 @@ pub struct Settings {
     pub line_spacing: f32,
     /// Style headings, checklists, bold and code written in Markdown.
     pub markdown: bool,
+    pub language: String, // German | English
 }
 
 impl Default for Settings {
@@ -57,6 +58,7 @@ impl Default for Settings {
             font: None,
             line_spacing: 0.0,
             markdown: true,
+            language: if crate::sys::system_is_german() { "German" } else { "English" }.into(),
         }
     }
 }
@@ -123,7 +125,7 @@ pub fn load_note(path: &Path) -> String {
 /// expect (overwritten in a new folder, or changed by another computer in the meantime).
 pub fn backup_note(path: &Path, stamp: &str) {
     if path.exists() {
-        let _ = std::fs::copy(path, path.with_file_name(format!("scratch (Sicherung {stamp}).txt")));
+        let _ = std::fs::copy(path, path.with_file_name(format!("scratch (backup {stamp}).txt")));
     }
 }
 
@@ -131,10 +133,16 @@ pub fn backup_note(path: &Path, stamp: &str) {
 const DAILY_BACKUPS: usize = 10;
 
 /// Keeps the note as it was before the first change of `day` (YYYY-MM-DD) in the folder
-/// "Sicherungen" next to it, one file per day, and drops all but the newest ones.
+/// "Backups" next to it, one file per day, and drops all but the newest ones.
 /// Best effort like the settings: a failed copy must never disturb saving.
 pub fn daily_backup(path: &Path, day: &str) {
-    let Some(folder) = path.parent().map(|parent| parent.join("Sicherungen")) else { return };
+    let Some(parent) = path.parent() else { return };
+    let folder = parent.join("Backups");
+    // Up to 1.8 the folder had a German name.
+    let old = parent.join("Sicherungen");
+    if old.is_dir() && !folder.exists() {
+        let _ = std::fs::rename(&old, &folder);
+    }
     let copy = folder.join(format!("scratch {day}.txt"));
     if copy.exists() || std::fs::metadata(path).map_or(true, |note| note.len() == 0) {
         return;

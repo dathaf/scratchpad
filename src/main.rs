@@ -5,6 +5,7 @@
 
 mod editor;
 mod gfx;
+mod lang;
 mod menu;
 mod settings;
 mod sys;
@@ -35,6 +36,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use editor::{Edit, Editor};
 use gfx::{contains, fade, gray, rect, rgb, rgba, Color, Gfx};
+use lang::{english, tr};
 use settings::Settings;
 use sys::wide;
 
@@ -75,6 +77,7 @@ const ID_COPY: usize = 161;
 const ID_PASTE: usize = 162;
 const ID_SELECT_ALL: usize = 163;
 const ID_OPEN: usize = 170;
+const ID_LANGUAGE: usize = 180; // +0 German, +1 English
 
 const ID_FIND: usize = 190;
 const ID_AUTO_HIDE: usize = 191;
@@ -98,17 +101,19 @@ const SPACINGS: [f32; 3] = [0.0, 1.5, 1.8];
 const ID_CYCLE_FONT: usize = 206;
 const ID_CYCLE_SPACING: usize = 207;
 const ID_TINT_SLIDER: usize = 208;
+const ID_CYCLE_LANGUAGE: usize = 209;
 const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.8.3), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.8.3p";
+/// number without the letter (1.9.0), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.9p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
 const MODES: [&str; 3] = ["Always", "Hover", "Never"];
 const STYLES: [&str; 2] = ["Dots", "Symbols"];
+const LANGUAGES: [&str; 2] = ["German", "English"];
 
 const DWMWA_USE_IMMERSIVE_DARK_MODE_: i32 = 20;
 const DWMWA_SYSTEMBACKDROP_TYPE_: i32 = 38;
@@ -358,6 +363,8 @@ struct App {
     /// Modification time of the note file as we last read or wrote it; a different time
     /// on disk means another program (e.g. a sync from another computer) changed it.
     note_mtime: Option<SystemTime>,
+    /// The last save did not work; its message stays until one does.
+    save_failed: bool,
     /// Year, month, day for which the daily copy of the note has been taken care of.
     backup_day: (u16, u16, u16),
     search: Option<Search>,
@@ -435,6 +442,7 @@ impl App {
             saved_label: String::new(),
             note_mtime: settings::modified(&note_path),
             backup_day: (0, 0, 0),
+            save_failed: false,
             note_path,
             search: None,
             dialog_open: false,
@@ -918,7 +926,7 @@ impl App {
         g.dc.PushAxisAlignedClip(&view, D2D1_ANTIALIAS_MODE_ALIASED);
         if self.editor.text.is_empty() {
             let line = rect(TEXT_X, text_top, self.w - TEXT_X, self.settings.font_size * 1.35);
-            g.text("Schreib einfach los …", &self.fonts.placeholder, line, p.placeholder, DWRITE_TEXT_ALIGNMENT_LEADING);
+            g.text(tr("Schreib einfach los …", "Just start writing …"), &self.fonts.placeholder, line, p.placeholder, DWRITE_TEXT_ALIGNMENT_LEADING);
         }
         let caret = (self.focused && self.caret_on && !self.recording && !self.info_open && self.search.is_none()).then_some(p.accent);
         self.editor.draw(g, TEXT_X, text_top, clip_top, self.view_bottom(), p.fg, fade(p.accent, 0.35), fade(p.accent, 0.16), caret);
@@ -955,7 +963,7 @@ impl App {
         let count = if search.query.is_empty() {
             String::new()
         } else if search.matches.is_empty() {
-            "Keine Treffer".to_string()
+            tr("Keine Treffer", "No matches").to_string()
         } else {
             format!("{} / {}", search.current + 1, search.matches.len())
         };
@@ -982,12 +990,12 @@ impl App {
             }
             g.dc.PopAxisAlignedClip();
         };
-        row(bar.top, "\u{E721}", &search.query, "Suchen", count_width + 14.0, !search.in_replacement);
+        row(bar.top, "\u{E721}", &search.query, tr("Suchen", "Find"), count_width + 14.0, !search.in_replacement);
         if search.replace_mode {
             g.fill_rect(rect(bar.left + 10.0, bar.top + 33.5, bar.right - bar.left - 20.0, 1.0), p.card_border);
-            row(bar.top + 34.0, "\u{E70F}", &search.replacement, "Ersetzen durch", 130.0, search.in_replacement);
+            row(bar.top + 34.0, "\u{E70F}", &search.replacement, tr("Ersetzen durch", "Replace with"), 130.0, search.in_replacement);
             let (one, all) = self.rect_replace_buttons();
-            for (button, label) in [(one, "Ersetzen"), (all, "Alle")] {
+            for (button, label) in [(one, tr("Ersetzen", "Replace")), (all, tr("Alle", "All"))] {
                 g.fill_round(button, 6.0, p.hover);
                 g.text(label, &self.fonts.status, button, p.fg, DWRITE_TEXT_ALIGNMENT_CENTER);
             }
@@ -1020,7 +1028,7 @@ impl App {
         let (cw, ch) = (300.0f32.min(self.w - 24.0), 104.0);
         let card = rect((self.w - cw) / 2.0, TITLE_H + (self.h - TITLE_H - ch) / 2.0, cw, ch);
         self.draw_card(g, card, if self.glass() { 18.0 } else { 12.0 });
-        g.text("Neues Tastenkürzel drücken", &self.fonts.overlay_title,
+        g.text(tr("Neues Tastenkürzel drücken", "Press the new hotkey"), &self.fonts.overlay_title,
             rect(card.left, card.top + 14.0, cw, 24.0), p.fg, DWRITE_TEXT_ALIGNMENT_CENTER);
         g.text(&self.hint, &self.fonts.overlay_hint,
             rect(card.left + 16.0, card.top + 40.0, cw - 32.0, ch - 50.0), p.muted, DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -1032,7 +1040,7 @@ impl App {
         let text = &self.editor.text;
         let is_space = |c: u16| matches!(c, 9 | 10 | 13 | 32 | 0xA0);
         let words = text.iter().enumerate().filter(|(i, &c)| !is_space(c) && (*i == 0 || is_space(text[i - 1]))).count();
-        self.stats = format!("{} {}  ·  {} Zeichen", words, if words == 1 { "Wort" } else { "Wörter" }, text.len());
+        self.stats = format!("{} {}  ·  {} {}", words, if words == 1 { tr("Wort", "word") } else { tr("Wörter", "words") }, text.len(), tr("Zeichen", "characters"));
     }
 
     /// Pixel rectangle that contains the blinking caret (in the note or in the find bar).
@@ -1095,9 +1103,13 @@ impl App {
             Ok(()) => {
                 self.dirty = false;
                 self.note_mtime = settings::modified(&self.note_path);
-                self.saved_label = if show_label { "Gespeichert".into() } else { String::new() };
+                self.saved_label = if show_label { tr("Gespeichert", "Saved").into() } else { String::new() };
+                self.save_failed = false;
             }
-            Err(error) => self.saved_label = format!("Speichern fehlgeschlagen: {error}"),
+            Err(error) => {
+                self.saved_label = format!("{}: {error}", tr("Speichern fehlgeschlagen", "Saving failed"));
+                self.save_failed = true;
+            }
         }
         SetTimer(self.hwnd, T_SAVED_LABEL, 1500, None);
         self.invalidate();
@@ -1241,7 +1253,7 @@ impl App {
         self.editor.set_caret(0, false);
         self.after_edit();
         self.run_search();
-        self.saved_label = format!("{count} ersetzt");
+        self.saved_label = format!("{count} {}", tr("ersetzt", "replaced"));
         SetTimer(self.hwnd, T_SAVED_LABEL, 1500, None);
     }
 
@@ -1352,7 +1364,7 @@ impl App {
         if self.dirty {
             self.save_note(true);
         } else {
-            self.saved_label = "Gespeichert".into();
+            self.saved_label = tr("Gespeichert", "Saved").into();
             SetTimer(self.hwnd, T_SAVED_LABEL, 1500, None);
             self.invalidate();
         }
@@ -1804,6 +1816,13 @@ impl App {
             ID_TITLE_MODE..=122 => self.settings.title_mode = MODES[id - ID_TITLE_MODE].into(),
             ID_BUTTONS_MODE..=132 => self.settings.buttons_mode = MODES[id - ID_BUTTONS_MODE].into(),
             ID_BUTTON_STYLE..=141 => self.settings.button_style = STYLES[id - ID_BUTTON_STYLE].into(),
+            ID_LANGUAGE..=181 => {
+                self.settings.language = LANGUAGES[id - ID_LANGUAGE].into();
+                lang::set_english(self.settings.language == "English");
+                self.update_stats();
+                self.saved_label.clear();
+                self.update_tray_tip();
+            }
             ID_HOTKEY => self.start_recording(),
             ID_AUTOSTART => sys::set_autostart(!sys::autostart_enabled()),
             ID_QUIT => self.cmds.push(Cmd::Exit),
@@ -2006,7 +2025,7 @@ impl App {
                 T_ANIM => self.tick_animation(),
                 T_SAVED_LABEL => {
                     let _ = KillTimer(self.hwnd, T_SAVED_LABEL);
-                    if !self.saved_label.starts_with("Speichern fehlgeschlagen") {
+                    if !self.save_failed {
                         self.saved_label.clear();
                     }
                     self.invalidate();
@@ -2118,9 +2137,12 @@ unsafe fn run_commands(hwnd: HWND, cell: &RefCell<App>) {
                     let mut load_existing = false;
                     if target.exists() {
                         cell.borrow_mut().dialog_open = true;
-                        let answer = MessageBoxW(hwnd,
-                            w!("In diesem Ordner liegt bereits eine Notiz (scratch.txt).\n\nJa: diese Notiz laden. Die aktuelle Notiz bleibt am alten Ort erhalten.\n\nNein: sie mit der aktuellen Notiz überschreiben. Von der vorhandenen wird vorher eine Sicherungskopie angelegt."),
-                            w!("Scratchpad"), MB_YESNOCANCEL | MB_ICONQUESTION);
+                        let question = if english() {
+                            w!("This folder already holds a note (scratch.txt).\n\nYes: load that note. The current note stays in its old place.\n\nNo: overwrite it with the current note. A backup copy of the existing one is made first.")
+                        } else {
+                            w!("In diesem Ordner liegt bereits eine Notiz (scratch.txt).\n\nJa: diese Notiz laden. Die aktuelle Notiz bleibt am alten Ort erhalten.\n\nNein: sie mit der aktuellen Notiz überschreiben. Von der vorhandenen wird vorher eine Sicherungskopie angelegt.")
+                        };
+                        let answer = MessageBoxW(hwnd, question, w!("Scratchpad"), MB_YESNOCANCEL | MB_ICONQUESTION);
                         cell.borrow_mut().dialog_open = false;
                         if answer == IDCANCEL {
                             continue;
@@ -2150,7 +2172,7 @@ unsafe fn pick_folder(hwnd: HWND) -> Option<PathBuf> {
     let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
     let options = dialog.GetOptions().ok()?;
     dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM).ok()?;
-    let _ = dialog.SetTitle(w!("Ordner für die Notiz wählen"));
+    let _ = dialog.SetTitle(if english() { w!("Choose the folder for the note") } else { w!("Ordner für die Notiz wählen") });
     dialog.Show(hwnd).ok()?; // fails when the user cancels
     let path = dialog.GetResult().ok()?.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
     let folder = path.to_string().ok().map(PathBuf::from);
@@ -2267,6 +2289,7 @@ unsafe fn run() -> Result<()> {
     RegisterClassExW(&menu_class);
 
     let settings = Settings::load();
+    lang::set_english(settings.language == "English");
     let r = initial_rect(&settings);
     // No WS_SYSMENU: the title bar buttons are drawn by the app itself.
     let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), class_name, w!("Scratchpad"),

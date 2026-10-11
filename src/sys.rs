@@ -1,5 +1,6 @@
 //! Small Windows helpers: registry (theme, accent, autostart), hotkey names, icon, dark menus.
 
+use crate::lang::tr;
 use std::ffi::c_void;
 use windows::core::*;
 use windows::Win32::Foundation::*;
@@ -117,9 +118,9 @@ pub fn is_modifier_key(vk: u32) -> bool {
 
 pub fn format_hotkey(modifiers: u32, vk: u32) -> String {
     let mut parts: Vec<String> = Vec::new();
-    if modifiers & MOD_CONTROL_ != 0 { parts.push("Strg".into()); }
+    if modifiers & MOD_CONTROL_ != 0 { parts.push(tr("Strg", "Ctrl").into()); }
     if modifiers & MOD_ALT_ != 0 { parts.push("Alt".into()); }
-    if modifiers & MOD_SHIFT_ != 0 { parts.push("Umschalt".into()); }
+    if modifiers & MOD_SHIFT_ != 0 { parts.push(tr("Umschalt", "Shift").into()); }
     if modifiers & MOD_WIN_ != 0 { parts.push("Win".into()); }
     parts.push(key_name(vk));
     parts.join(" + ")
@@ -129,13 +130,13 @@ fn key_name(vk: u32) -> String {
     match vk {
         0x30..=0x5A => char::from_u32(vk).unwrap_or('?').to_string(), // 0–9, A–Z
         0x70..=0x87 => format!("F{}", vk - 0x6F),
-        0x20 => "Leertaste".into(),
+        0x20 => tr("Leertaste", "Space").into(),
         _ => unsafe {
             // Everything else: ask Windows for the localized key name.
             let scan = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
             let mut buffer = [0u16; 64];
             let len = GetKeyNameTextW((scan << 16) as i32, &mut buffer);
-            if len > 0 { String::from_utf16_lossy(&buffer[..len as usize]) } else { format!("Taste {vk:02X}") }
+            if len > 0 { String::from_utf16_lossy(&buffer[..len as usize]) } else { format!("{} {vk:02X}", tr("Taste", "Key")) }
         },
     }
 }
@@ -237,4 +238,14 @@ pub fn windows_build() -> u32 {
     let mut info = OsVersionInfo { size: std::mem::size_of::<OsVersionInfo>() as u32, major: 0, minor: 0, build: 0, platform: 0, csd: [0; 128] };
     unsafe { RtlGetVersion(&mut info) };
     info.build
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetUserDefaultUILanguage() -> u16;
+}
+
+/// Whether Windows itself is shown in German (decides the app's language on first start).
+pub fn system_is_german() -> bool {
+    unsafe { GetUserDefaultUILanguage() & 0x3FF == 0x07 }
 }

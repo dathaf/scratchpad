@@ -94,55 +94,57 @@ impl App {
             Which::Edit => {
                 let selection = self.editor.has_selection();
                 vec![
-                    MenuItem { enabled: selection, ..item(Kind::Action, "Ausschneiden", "Strg + X", ID_CUT) },
-                    MenuItem { enabled: selection, ..item(Kind::Action, "Kopieren", "Strg + C", ID_COPY) },
-                    item(Kind::Action, "Einfügen", "Strg + V", ID_PASTE),
+                    MenuItem { enabled: selection, ..item(Kind::Action, tr("Ausschneiden", "Cut"), tr("Strg + X", "Ctrl + X"), ID_CUT) },
+                    MenuItem { enabled: selection, ..item(Kind::Action, tr("Kopieren", "Copy"), tr("Strg + C", "Ctrl + C"), ID_COPY) },
+                    item(Kind::Action, tr("Einfügen", "Paste"), tr("Strg + V", "Ctrl + V"), ID_PASTE),
                     separator(),
-                    item(Kind::Action, "Alles auswählen", "Strg + A", ID_SELECT_ALL),
+                    item(Kind::Action, tr("Alles auswählen", "Select all"), tr("Strg + A", "Ctrl + A"), ID_SELECT_ALL),
                 ]
             }
             Which::Tray => vec![
-                item(Kind::Action, "Scratchpad öffnen", self.hotkey_text(), ID_OPEN),
-                check("Mit Windows starten", ID_AUTOSTART, sys::autostart_enabled()),
+                item(Kind::Action, tr("Scratchpad öffnen", "Open Scratchpad"), self.hotkey_text(), ID_OPEN),
+                check(tr("Mit Windows starten", "Start with Windows"), ID_AUTOSTART, sys::autostart_enabled()),
                 separator(),
-                item(Kind::Action, "Beenden", "", ID_QUIT),
+                item(Kind::Action, tr("Beenden", "Quit"), "", ID_QUIT),
             ],
             Which::Main => {
-                let mode = |m: &str| ["Immer", "Bei Maus", "Nie"][position(&MODES, m)];
+                let mode = |m: &str| [tr("Immer", "Always"), tr("Bei Maus", "On hover"), tr("Nie", "Never")][position(&MODES, m)];
                 let folder = match &s.note_folder {
                     Some(folder) => PathBuf::from(folder).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| folder.clone()),
-                    None => "Standard".to_string(),
+                    None => tr("Standard", "Default").to_string(),
                 };
-                let spacing = ["Normal", "Mittel", "Weit"][SPACINGS.iter().position(|v| *v >= s.line_spacing).unwrap_or(0)];
+                let spacing = ["Normal", tr("Mittel", "Medium"), tr("Weit", "Wide")][SPACINGS.iter().position(|v| *v >= s.line_spacing).unwrap_or(0)];
                 let mut items = vec![
-                    item(Kind::Cycle, "Darstellung", ["Automatisch", "Hell", "Dunkel"][position(&THEMES, &s.theme)], ID_CYCLE_THEME),
-                    item(Kind::Cycle, "Material", ["Acryl", "Mica", "Liquid"][position(&MATERIALS, &s.material)], ID_CYCLE_MATERIAL),
-                    MenuItem { level: s.tint.min(100), ..item(Kind::Slider, "Deckkraft", format!("{} %", s.tint.min(100)), ID_TINT_SLIDER) },
+                    item(Kind::Cycle, tr("Darstellung", "Appearance"), [tr("Automatisch", "Automatic"), tr("Hell", "Light"), tr("Dunkel", "Dark")][position(&THEMES, &s.theme)], ID_CYCLE_THEME),
+                    item(Kind::Cycle, "Material", [tr("Acryl", "Acrylic"), "Mica", "Liquid"][position(&MATERIALS, &s.material)], ID_CYCLE_MATERIAL),
+                    MenuItem { level: s.tint.min(100), ..item(Kind::Slider, tr("Deckkraft", "Opacity"), format!("{} %", s.tint.min(100)), ID_TINT_SLIDER) },
                     separator(),
-                    item(Kind::Cycle, "Titel", mode(&s.title_mode), ID_CYCLE_TITLE),
-                    item(Kind::Cycle, "Fensterknöpfe", mode(&s.buttons_mode), ID_CYCLE_BUTTONS),
-                    item(Kind::Cycle, "Knopf-Stil", ["Punkte", "Symbole"][position(&STYLES, &s.button_style)], ID_CYCLE_STYLE),
+                    item(Kind::Cycle, tr("Titel", "Title"), mode(&s.title_mode), ID_CYCLE_TITLE),
+                    item(Kind::Cycle, tr("Fensterknöpfe", "Window buttons"), mode(&s.buttons_mode), ID_CYCLE_BUTTONS),
+                    item(Kind::Cycle, tr("Knopf-Stil", "Button style"), [tr("Punkte", "Dots"), tr("Symbole", "Symbols")][position(&STYLES, &s.button_style)], ID_CYCLE_STYLE),
                     separator(),
-                    item(Kind::Cycle, "Schrift", self.font_family(), ID_CYCLE_FONT),
-                    item(Kind::Cycle, "Zeilenabstand", spacing, ID_CYCLE_SPACING),
-                    check("Markdown-Formatierung", ID_MARKDOWN, s.markdown),
+                    item(Kind::Cycle, tr("Schrift", "Font"), self.font_family(), ID_CYCLE_FONT),
+                    item(Kind::Cycle, tr("Zeilenabstand", "Line spacing"), spacing, ID_CYCLE_SPACING),
+                    check(tr("Markdown-Formatierung", "Markdown styling"), ID_MARKDOWN, s.markdown),
                     separator(),
-                    item(Kind::Action, "Suchen …", "Strg + F", ID_FIND),
-                    item(Kind::Action, "Ersetzen …", "Strg + H", ID_REPLACE),
+                    item(Kind::Action, tr("Suchen …", "Find …"), tr("Strg + F", "Ctrl + F"), ID_FIND),
+                    item(Kind::Action, tr("Ersetzen …", "Replace …"), tr("Strg + H", "Ctrl + H"), ID_REPLACE),
                     separator(),
-                    item(Kind::Action, "Speicherort …", folder, ID_FOLDER_PICK),
+                    item(Kind::Action, tr("Speicherort …", "Note folder …"), folder, ID_FOLDER_PICK),
                 ];
                 if s.note_folder.is_some() {
-                    items.push(item(Kind::Action, "Standardordner verwenden", "", ID_FOLDER_DEFAULT));
+                    items.push(item(Kind::Action, tr("Standardordner verwenden", "Use default folder"), "", ID_FOLDER_DEFAULT));
                 }
-                let hotkey = format!("{}{}", self.hotkey_text(), if self.hotkey_ok { "" } else { " (belegt)" });
+                let hotkey = format!("{}{}", self.hotkey_text(), if self.hotkey_ok { "" } else { tr(" (belegt)", " (in use)") });
                 items.extend([
-                    item(Kind::Action, "Tastenkürzel ändern …", hotkey, ID_HOTKEY),
-                    check("Automatisch ausblenden", ID_AUTO_HIDE, s.auto_hide),
-                    check("Mit Windows starten", ID_AUTOSTART, sys::autostart_enabled()),
+                    item(Kind::Action, tr("Tastenkürzel ändern …", "Change hotkey …"), hotkey, ID_HOTKEY),
+                    check(tr("Automatisch ausblenden", "Hide automatically"), ID_AUTO_HIDE, s.auto_hide),
+                    check(tr("Mit Windows starten", "Start with Windows"), ID_AUTOSTART, sys::autostart_enabled()),
                     separator(),
-                    item(Kind::Action, "Info", "", ID_INFO),
-                    item(Kind::Action, "Scratchpad beenden", "Strg + Q", ID_QUIT),
+                    item(Kind::Cycle, tr("Sprache", "Language"), ["Deutsch", "English"][position(&LANGUAGES, &s.language)], ID_CYCLE_LANGUAGE),
+                    separator(),
+                    item(Kind::Action, tr("Info", "About"), "", ID_INFO),
+                    item(Kind::Action, tr("Scratchpad beenden", "Quit Scratchpad"), tr("Strg + Q", "Ctrl + Q"), ID_QUIT),
                 ]);
                 items
             }
@@ -367,6 +369,7 @@ impl App {
             ID_CYCLE_TITLE => (ID_TITLE_MODE, MODES.len(), position(&MODES, &s.title_mode)),
             ID_CYCLE_BUTTONS => (ID_BUTTONS_MODE, MODES.len(), position(&MODES, &s.buttons_mode)),
             ID_CYCLE_STYLE => (ID_BUTTON_STYLE, STYLES.len(), position(&STYLES, &s.button_style)),
+            ID_CYCLE_LANGUAGE => (ID_LANGUAGE, LANGUAGES.len(), position(&LANGUAGES, &s.language)),
             ID_CYCLE_FONT => {
                 let choices = &self.fonts.choices;
                 if !choices.is_empty() {
