@@ -124,6 +124,7 @@ impl App {
                     item(Kind::Cycle, tr("Knopf-Stil", "Button style"), [tr("Punkte", "Dots"), tr("Symbole", "Symbols")][position(&STYLES, &s.button_style)], ID_CYCLE_STYLE),
                     separator(),
                     item(Kind::Cycle, tr("Schrift", "Font"), self.font_family(), ID_CYCLE_FONT),
+                    item(Kind::Action, tr("Andere Schrift …", "Other font …"), "", ID_FONT_PICK),
                     item(Kind::Cycle, tr("Zeilenabstand", "Line spacing"), spacing, ID_CYCLE_SPACING),
                     check(tr("Markdown-Formatierung", "Markdown styling"), ID_MARKDOWN, s.markdown),
                     separator(),

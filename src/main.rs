@@ -28,6 +28,7 @@ use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Memory::*;
 use windows::Win32::System::Threading::*;
+use windows::Win32::UI::Controls::Dialogs::*;
 use windows::Win32::UI::Controls::MARGINS;
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
@@ -104,10 +105,11 @@ const ID_TINT_SLIDER: usize = 208;
 const ID_CYCLE_LANGUAGE: usize = 209;
 const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
+const ID_FONT_PICK: usize = 197;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.9.0), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.9p";
+/// number without the letter (1.9.1), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.9.1p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -145,6 +147,7 @@ enum Cmd {
     Exit,
     OpenUrl(String),
     PickFolder,
+    PickFont,
     /// Move the note to this folder (None = default folder).
     SetFolder(Option<PathBuf>),
 }
@@ -1819,6 +1822,7 @@ impl App {
             ID_LANGUAGE..=181 => {
                 self.settings.language = LANGUAGES[id - ID_LANGUAGE].into();
                 lang::set_english(self.settings.language == "English");
+                self.settings.save();
                 self.update_stats();
                 self.saved_label.clear();
                 self.update_tray_tip();
@@ -1839,6 +1843,7 @@ impl App {
             ID_REPLACE => self.open_search(true),
             ID_AUTO_HIDE => self.settings.auto_hide = !self.settings.auto_hide,
             ID_FOLDER_PICK => self.cmds.push(Cmd::PickFolder),
+            ID_FONT_PICK => self.cmds.push(Cmd::PickFont),
             ID_FOLDER_DEFAULT => self.cmds.push(Cmd::SetFolder(None)),
             ID_INFO => self.info_open = true,
             _ => return,
@@ -2128,6 +2133,20 @@ unsafe fn run_commands(hwnd: HWND, cell: &RefCell<App>) {
                         app.cmds.push(Cmd::SetFolder(Some(folder)));
                     }
                 }
+                Cmd::PickFont => {
+                    let (dwrite, current) = {
+                        let mut app = cell.borrow_mut();
+                        app.dialog_open = true;
+                        (app.fonts.dwrite.clone(), app.font_family())
+                    };
+                    let family = pick_font(hwnd, &dwrite, &current);
+                    let mut app = cell.borrow_mut();
+                    app.dialog_open = false;
+                    if let Some(family) = family {
+                        app.settings.font = Some(family);
+                        app.apply_font();
+                    }
+                }
                 Cmd::SetFolder(folder) => {
                     let target = settings::note_path_in(&folder.clone().unwrap_or_else(settings::data_dir));
                     if target == cell.borrow().note_path {
@@ -2178,6 +2197,65 @@ unsafe fn pick_folder(hwnd: HWND) -> Option<PathBuf> {
     let folder = path.to_string().ok().map(PathBuf::from);
     CoTaskMemFree(Some(path.0 as *const c_void));
     folder
+}
+
+/// System font dialog; the DirectWrite family of the chosen font, None if cancelled.
+/// Style and size in the dialog are ignored: the app has its own controls for them.
+unsafe fn pick_font(hwnd: HWND, dwrite: &IDWriteFactory, current: &str) -> Option<String> {
+    let mut logfont = LOGFONTW { lfHeight: -19, ..Default::default() };
+    for (slot, unit) in logfont.lfFaceName.iter_mut().take(31).zip(current.encode_utf16()) {
+        *slot = unit;
+    }
+    let mut choice = CHOOSEFONTW {
+        lStructSize: std::mem::size_of::<CHOOSEFONTW>() as u32,
+        hwndOwner: hwnd,
+        lpLogFont: &mut logfont,
+        Flags: CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_NOSCRIPTSEL | CF_FORCEFONTEXIST,
+        ..Default::default()
+    };
+    // Loaded only now: a static import would make every start load the dialog library.
+    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+    let library = LoadLibraryW(w!("comdlg32.dll")).ok()?;
+    let choose_font: unsafe extern "system" fn(*mut CHOOSEFONTW) -> BOOL = std::mem::transmute(GetProcAddress(library, s!("ChooseFontW"))?);
+    if !choose_font(&mut choice).as_bool() {
+        return None;
+    }
+    font_family_of(dwrite, &logfont)
+}
+
+/// The dialog speaks GDI, where a weight can be a family of its own ("… Light", "… Semibold").
+/// Returns the family DirectWrite knows the face by: the face name itself if that is one,
+/// else the family DirectWrite maps it to, else the name without its trailing weight words.
+unsafe fn font_family_of(dwrite: &IDWriteFactory, logfont: &LOGFONTW) -> Option<String> {
+    let len = logfont.lfFaceName.iter().position(|&c| c == 0).unwrap_or(logfont.lfFaceName.len());
+    let face = String::from_utf16_lossy(&logfont.lfFaceName[..len]);
+    let known = |name: &str| !Fonts::installed(dwrite, &[name]).is_empty();
+    if known(&face) {
+        return Some(face);
+    }
+    let mapped = (|| {
+        let names = dwrite.GetGdiInterop().ok()?.CreateFontFromLOGFONT(logfont).ok()?.GetFontFamily().ok()?.GetFamilyNames().ok()?;
+        let (mut index, mut exists) = (0u32, BOOL(0));
+        let _ = names.FindLocaleName(w!("en-us"), &mut index, &mut exists);
+        if !exists.as_bool() {
+            index = 0;
+        }
+        let mut buffer = [0u16; 128];
+        names.GetString(index, &mut buffer).ok()?;
+        let len = buffer.iter().position(|&c| c == 0).unwrap_or(0);
+        Some(String::from_utf16_lossy(&buffer[..len]))
+    })();
+    if mapped.is_some() {
+        return mapped;
+    }
+    let mut shorter = face.as_str();
+    while let Some((rest, _)) = shorter.rsplit_once(' ') {
+        if known(rest) {
+            return Some(rest.to_string());
+        }
+        shorter = rest;
+    }
+    None
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -2329,5 +2407,27 @@ unsafe fn run() -> Result<()> {
 fn main() {
     unsafe {
         let _ = run();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_gdi_face_name_leads_to_a_family_directwrite_knows() {
+        unsafe {
+            let dwrite: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let family = |face: &str| {
+                let mut logfont = LOGFONTW::default();
+                for (slot, unit) in logfont.lfFaceName.iter_mut().take(31).zip(face.encode_utf16()) {
+                    *slot = unit;
+                }
+                font_family_of(&dwrite, &logfont)
+            };
+            assert_eq!(family("Consolas").as_deref(), Some("Consolas"));
+            assert_eq!(family("Segoe UI Semibold").as_deref(), Some("Segoe UI"));
+            assert_eq!(family("Gibt es nicht 123"), None);
+        }
     }
 }

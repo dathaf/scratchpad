@@ -7,7 +7,7 @@ directly against the Windows API (no .NET, no runtime). The interface is in Germ
 - starts in about 0.1 s, uses about 9 MB of memory, one `.exe` of about 500 KB
 - light Markdown: headings, **bold**, `code`, tickable checklists, clickable links;
   the syntax characters hide while the caret is elsewhere
-- search and replace, font and line spacing, title bar with round buttons on the left or symbols on the right
+- search and replace, any installed font, line spacing, title bar with round buttons on the left or symbols on the right
 
 ## Building
 
