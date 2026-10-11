@@ -108,8 +108,8 @@ const ID_REPLACE: usize = 196;
 const ID_FONT_PICK: usize = 197;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.9.1), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.9.1p";
+/// number without the letter (1.9.2), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.9.2p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -1737,7 +1737,7 @@ impl App {
         self.recording = true;
         // Free the current combination so it can be pressed again while recording.
         sys::unregister_hotkey(self.hwnd);
-        self.hint = format!("Aktuell: {}\nEsc bricht ab", self.hotkey_text());
+        self.hint = format!("{}: {}\n{}", tr("Aktuell", "Current"), self.hotkey_text(), tr("Esc bricht ab", "Esc cancels"));
         self.invalidate();
     }
 
@@ -1759,9 +1759,10 @@ impl App {
             return;
         }
         if modifiers == 0 || modifiers == sys::MOD_SHIFT_ {
-            self.hint = "Bitte mit Strg, Alt oder Win kombinieren.\nEsc bricht ab".into();
+            self.hint = tr("Bitte mit Strg, Alt oder Win kombinieren.\nEsc bricht ab", "Please combine with Ctrl, Alt or Win.\nEsc cancels").into();
         } else if !sys::register_hotkey(self.hwnd, modifiers, vk) {
-            self.hint = format!("{} ist schon von einer anderen App belegt.\nEsc bricht ab", sys::format_hotkey(modifiers, vk));
+            self.hint = format!("{} {}", sys::format_hotkey(modifiers, vk),
+                tr("ist schon von einer anderen App belegt.\nEsc bricht ab", "is already used by another app.\nEsc cancels"));
         } else {
             self.settings.hotkey_modifiers = modifiers;
             self.settings.hotkey_key = vk;
