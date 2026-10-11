@@ -101,10 +101,9 @@ const ID_TINT_SLIDER: usize = 208;
 const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
-/// Shown in the Info card. Chosen by the app's owner: 1.666 as a nod to Doom, "p" for
-/// performance. Cargo.toml carries the same number without the letter (1.666.0), because
-/// Cargo does not accept a suffix like this.
-const VERSION: &str = "1.7p";
+/// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
+/// number without the letter (1.8.0), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.8p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -359,6 +358,8 @@ struct App {
     /// Modification time of the note file as we last read or wrote it; a different time
     /// on disk means another program (e.g. a sync from another computer) changed it.
     note_mtime: Option<SystemTime>,
+    /// Year, month, day for which the daily copy of the note has been taken care of.
+    backup_day: (u16, u16, u16),
     search: Option<Search>,
     /// A system dialog is open; losing focus to it must not auto-hide the window.
     dialog_open: bool,
@@ -433,6 +434,7 @@ impl App {
             stats: String::new(),
             saved_label: String::new(),
             note_mtime: settings::modified(&note_path),
+            backup_day: (0, 0, 0),
             note_path,
             search: None,
             dialog_open: false,
@@ -1080,6 +1082,13 @@ impl App {
         // keep their version next to the note instead of silently overwriting it.
         if settings::modified(&self.note_path) != self.note_mtime {
             settings::backup_note(&self.note_path, &timestamp());
+        }
+        // The first save of a day keeps the note as it was before.
+        let today = GetLocalTime();
+        let day = (today.wYear, today.wMonth, today.wDay);
+        if day != self.backup_day {
+            self.backup_day = day;
+            settings::daily_backup(&self.note_path, &format!("{:04}-{:02}-{:02}", day.0, day.1, day.2));
         }
         // Windows line endings on disk, so the file opens cleanly everywhere.
         match settings::save_note(&self.note_path, &self.editor.text_string().replace('\n', "\r\n")) {

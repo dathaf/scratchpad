@@ -126,3 +126,30 @@ pub fn backup_note(path: &Path, stamp: &str) {
         let _ = std::fs::copy(path, path.with_file_name(format!("scratch (Sicherung {stamp}).txt")));
     }
 }
+
+/// How many daily copies of the note are kept.
+const DAILY_BACKUPS: usize = 10;
+
+/// Keeps the note as it was before the first change of `day` (YYYY-MM-DD) in the folder
+/// "Sicherungen" next to it, one file per day, and drops all but the newest ones.
+/// Best effort like the settings: a failed copy must never disturb saving.
+pub fn daily_backup(path: &Path, day: &str) {
+    let Some(folder) = path.parent().map(|parent| parent.join("Sicherungen")) else { return };
+    let copy = folder.join(format!("scratch {day}.txt"));
+    if copy.exists() || std::fs::metadata(path).map_or(true, |note| note.len() == 0) {
+        return;
+    }
+    if std::fs::create_dir_all(&folder).is_err() || std::fs::copy(path, &copy).is_err() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(&folder) else { return };
+    let mut copies: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|file| file.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with("scratch ") && name.ends_with(".txt")))
+        .collect();
+    copies.sort(); // the date in the name sorts oldest first
+    for old in copies.iter().rev().skip(DAILY_BACKUPS) {
+        let _ = std::fs::remove_file(old);
+    }
+}

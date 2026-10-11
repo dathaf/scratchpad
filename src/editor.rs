@@ -48,16 +48,26 @@ struct Para {
     links: Vec<(usize, usize)>,
     /// Position of the "[" of a Markdown checkbox in this paragraph; filled together with `layout`.
     checkbox: Option<usize>,
-    /// Bold spans including their ** (start, end) relative to the paragraph; kept with `height`.
-    bold: Vec<(usize, usize)>,
-    /// One bit per bold span whose ** were visible when the paragraph was last laid out.
+    /// Styled spans with their syntax characters, relative to the paragraph; kept with `height`.
+    spans: Vec<Span>,
+    /// One bit per span whose syntax characters were visible when the paragraph was last laid out.
     shown: u64,
 }
 
 impl Para {
     fn new(start: usize, len: usize) -> Self {
-        Self { start, len, layout: None, height: None, links: Vec::new(), checkbox: None, bold: Vec::new(), shown: 0 }
+        Self { start, len, layout: None, height: None, links: Vec::new(), checkbox: None, spans: Vec::new(), shown: 0 }
     }
+}
+
+/// A styled stretch of a paragraph including its syntax characters: `open` of them at the
+/// start ("# ", "**", "`") and `close` at the end. They hide while the selection is elsewhere.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Span {
+    from: usize,
+    to: usize,
+    open: usize,
+    close: usize,
 }
 
 /// What the light Markdown styling found in one paragraph (all positions relative to it).
@@ -71,6 +81,8 @@ struct Markdown {
     code: Vec<(usize, usize)>,
     /// Syntax characters (#, **, `) that are shown dimmed.
     markers: Vec<(usize, usize)>,
+    /// Heading, bold and code with their syntax characters, in the order they were found.
+    spans: Vec<Span>,
 }
 
 /// For a paragraph that is a list item ("- text", "* text", "- [ ] task", optionally
@@ -91,13 +103,13 @@ fn list_prefix(text: &[u16]) -> Option<(usize, Vec<u16>)> {
     Some((content, next))
 }
 
-/// Which bold spans (with their **, relative to a paragraph at `start`) the selection touches,
-/// one bit per span. Those show their ** so they can be edited; the others hide them.
+/// Which spans (relative to a paragraph at `start`) the selection touches, one bit per span.
+/// Those show their syntax characters so they can be edited; the others hide them.
 /// Only the first 64 spans of a paragraph take part, any further ones always show theirs.
-fn touched(spans: &[(usize, usize)], start: usize, selection: (usize, usize)) -> u64 {
+fn touched(spans: &[Span], start: usize, selection: (usize, usize)) -> u64 {
     let mut bits = 0;
-    for (i, &(from, to)) in spans.iter().take(64).enumerate() {
-        if selection.0 <= start + to && selection.1 >= start + from {
+    for (i, span) in spans.iter().take(64).enumerate() {
+        if selection.0 <= start + span.to && selection.1 >= start + span.from {
             bits |= 1 << i;
         }
     }
@@ -118,6 +130,10 @@ fn parse_markdown(text: &[u16]) -> Markdown {
     if (1..=6).contains(&hashes) && at(hashes) == SPACE {
         md.heading = hashes;
         md.markers.push((0, hashes + 1));
+        // A heading without text keeps its #, otherwise the line would look empty.
+        if text.len() > hashes + 1 {
+            md.spans.push(Span { from: 0, to: text.len(), open: hashes + 1, close: 0 });
+        }
     }
 
     // "- [ ] " or "* [x] ", optionally indented
@@ -138,6 +154,7 @@ fn parse_markdown(text: &[u16]) -> Markdown {
                     md.code.push((i + 1, end));
                     md.markers.push((i, i + 1));
                     md.markers.push((end, end + 1));
+                    md.spans.push(Span { from: i, to: end + 1, open: 1, close: 1 });
                 }
                 i = end + 1;
                 continue;
@@ -149,6 +166,7 @@ fn parse_markdown(text: &[u16]) -> Markdown {
                 md.bold.push((i + 2, end));
                 md.markers.push((i, i + 2));
                 md.markers.push((end, end + 2));
+                md.spans.push(Span { from: i, to: end + 2, open: 2, close: 2 });
                 i = end + 2;
                 continue;
             }
@@ -452,8 +470,7 @@ impl Editor {
                 .expect("CreateTextLayout");
             let links = find_links(slice);
             let markdown = if self.markdown { parse_markdown(slice) } else { Markdown::default() };
-            let spans: Vec<(usize, usize)> = markdown.bold.iter().map(|&(from, to)| (from - 2, to + 2)).collect();
-            let shown = touched(&spans, start, self.selection());
+            let shown = touched(&markdown.spans, start, self.selection());
             let mut metrics = DWRITE_TEXT_METRICS::default();
             let range =|from: usize, to: usize| DWRITE_TEXT_RANGE { startPosition: from as u32, length: (to - from) as u32 };
             unsafe {
@@ -469,10 +486,12 @@ impl Editor {
                 for &(from, to) in &markdown.bold {
                     let _ = layout.SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, range(from, to));
                 }
-                for (i, &(from, to)) in spans.iter().enumerate().take(64) {
+                for (i, span) in markdown.spans.iter().enumerate().take(64) {
                     if shown & (1 << i) == 0 {
-                        let _ = layout.SetFontSize(HIDDEN_SIZE, range(from, from + 2));
-                        let _ = layout.SetFontSize(HIDDEN_SIZE, range(to - 2, to));
+                        let _ = layout.SetFontSize(HIDDEN_SIZE, range(span.from, span.from + span.open));
+                        if span.close > 0 {
+                            let _ = layout.SetFontSize(HIDDEN_SIZE, range(span.to - span.close, span.to));
+                        }
                     }
                 }
                 if let Some(muted) = &self.muted_brush {
@@ -514,20 +533,20 @@ impl Editor {
                 self.tops_valid = false;
             }
             para.links = links;
-            para.bold = spans;
+            para.spans = markdown.spans;
             para.shown = shown;
             para.layout = Some(layout);
         }
         self.paras[index].layout.clone().unwrap()
     }
 
-    /// Lays paragraphs out again where the selection has moved onto or off bold text, so the
-    /// ** appear and vanish. Cheap enough to call before every use of the caret position.
+    /// Lays paragraphs out again where the selection has moved onto or off styled text, so its
+    /// syntax characters appear and vanish. Cheap enough to call before every use of the caret position.
     fn sync_markers(&mut self) {
         let selection = self.selection();
         let range = self.para_of(selection.0)..=self.para_of(selection.1);
         for (index, para) in self.paras.iter_mut().enumerate() {
-            if (para.shown != 0 || range.contains(&index)) && para.height.is_some() && touched(&para.bold, para.start, selection) != para.shown {
+            if (para.shown != 0 || range.contains(&index)) && para.height.is_some() && touched(&para.spans, para.start, selection) != para.shown {
                 para.layout = None;
                 para.height = None;
                 self.tops_valid = false;
@@ -1135,7 +1154,8 @@ mod tests {
     #[test]
     fn bold_markers_show_only_where_the_selection_touches() {
         // "**a** und **b**" in a paragraph starting at 10: spans 0..5 and 10..15
-        let spans = [(0, 5), (10, 15)];
+        let spans = md("**a** und **b**").spans;
+        assert_eq!(spans, vec![Span { from: 0, to: 5, open: 2, close: 2 }, Span { from: 10, to: 15, open: 2, close: 2 }]);
         assert_eq!(touched(&spans, 10, (0, 0)), 0);
         assert_eq!(touched(&spans, 10, (10, 10)), 0b01); // caret right before the first **
         assert_eq!(touched(&spans, 10, (15, 15)), 0b01); // right after its closing **
@@ -1144,6 +1164,17 @@ mod tests {
         assert_eq!(touched(&spans, 10, (22, 22)), 0b10);
         assert_eq!(touched(&spans, 10, (12, 21)), 0b11);
         assert_eq!(touched(&spans, 10, (26, 40)), 0);
+    }
+
+    #[test]
+    fn heading_and_code_markers_hide_like_bold_ones() {
+        // the heading spans its whole paragraph, so its # show while the caret is anywhere in it
+        let spans = md("## Titel mit `Code`").spans;
+        assert_eq!(spans, vec![Span { from: 0, to: 19, open: 3, close: 0 }, Span { from: 13, to: 19, open: 1, close: 1 }]);
+        assert_eq!(touched(&spans, 0, (5, 5)), 0b01);
+        assert_eq!(touched(&spans, 0, (14, 14)), 0b11);
+        assert_eq!(touched(&spans, 0, (30, 30)), 0);
+        assert_eq!(md("# ").spans, vec![]); // nothing to show but the #
     }
 
     #[test]

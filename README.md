@@ -34,3 +34,16 @@ wie bei der C#-Version. Beide Versionen können nicht gleichzeitig laufen.
 Der Ordner der Notiz lässt sich im Menü unter „Speicherort“ ändern, z. B. auf einen synchronisierten
 Ordner. Ändert ein anderer Rechner die Datei, wird sie beim Aktivieren des Fensters neu geladen;
 kollidiert das mit eigenen Änderungen, bleibt die fremde Fassung als `scratch (Sicherung …).txt` erhalten.
+
+Beim ersten Speichern eines Tages legt die App den Stand davor als `Sicherungen\scratch JJJJ-MM-TT.txt`
+neben die Notiz und behält die letzten 10 dieser Kopien.
+
+## Testen
+
+`cargo test` prüft die Editor-Logik. Für Tests am Fenster die Umgebungsvariable `SCRATCHPAD_TEST`
+setzen und `APPDATA` auf einen leeren Ordner zeigen lassen: Dann läuft eine Testkopie neben der echten App.
+
+## Versionen
+
+Der Code liegt in Git; jede ausgelieferte Version hat eine Marke (`v1.7p`, `v1.8p`, …).
+Mit `git log --oneline` sieht man die Liste, mit `git checkout v1.7p` holt man einen alten Stand zurück.
