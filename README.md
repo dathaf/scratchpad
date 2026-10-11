@@ -1,6 +1,10 @@
 # Scratchpad
 
+[![Build](https://github.com/dathaf/scratchpad/actions/workflows/build.yml/badge.svg)](https://github.com/dathaf/scratchpad/actions/workflows/build.yml)
+
 A small, always-there note window for Windows 11. One note, one hotkey, no waiting.
+
+**[Download Scratchpad.exe](https://github.com/dathaf/scratchpad/releases/latest/download/Scratchpad.exe)** (about 500 KB, no installer)
 
 ![Scratchpad with a checklist, a heading, bold text, code and a link](docs/screenshot.png)
 
@@ -23,12 +27,28 @@ about 9 MB of memory.
 - **Daily backups**: the first save of a day keeps yesterday's note; the last 10 days stay.
 - **German or English** interface.
 
+| Light | Menu |
+|---|---|
+| ![Scratchpad in light mode](docs/screenshot-light.png) | ![The menu with all settings](docs/menu.png) |
+
 ## Install
 
-Download `Scratchpad.exe` from the [releases](../../releases) and run it. There is no installer;
-put the file wherever you like. "Start with Windows" in the menu adds it to autostart.
+Download [`Scratchpad.exe`](https://github.com/dathaf/scratchpad/releases/latest/download/Scratchpad.exe)
+(or pick a version from the [releases](https://github.com/dathaf/scratchpad/releases)) and run it.
+There is no installer; put the file wherever you like. "Start with Windows" in the menu adds it
+to autostart.
 
 Requires Windows 11 22H2 or newer for the translucent backdrops.
+
+### "Windows protected your PC"
+
+The exe is not code-signed, because a certificate costs money every year. Windows therefore shows
+a blue SmartScreen warning the first time you start it. Click **More info**, then **Run anyway**.
+
+If you would rather not trust a download: from the version after 1.9.2p on, the exe of every
+release is built by GitHub itself from the tagged source (see
+[`.github/workflows/build.yml`](.github/workflows/build.yml); the build log prints its SHA-256
+checksum), or you can build it yourself, see [Building](#building).
 
 ## Keyboard
 
@@ -86,6 +106,20 @@ and a feature that would slow the app down noticeably does not get in.
 Measured on the author's PC in version 1.9p. A large note stays fast because the editor works
 paragraph by paragraph: typing only lays out the paragraph you are in, and only the visible
 paragraphs are drawn.
+
+## Limits
+
+- **Windows 11 only.** The backdrops need 22H2 or newer; other systems are not supported.
+- **One note.** No tabs, no folders, no sync of its own (a synced folder does that job).
+- **Light Markdown only.** No italics, tables or images; the note stays a plain text file.
+- **"Liquid" relies on an undocumented Windows function** for the blur behind the window.
+  A Windows update can change or remove it; Acrylic and Mica use the official interface.
+
+## Status
+
+This is a personal project, built for my own daily use and shared as it is. Bug reports and
+ideas are welcome in the [issues](https://github.com/dathaf/scratchpad/issues), but there is no
+promise of support or of a particular feature.
 
 ## Building
 
