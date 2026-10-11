@@ -5,3 +5,8 @@ dist/
 # Personal files that do not belong in the repository
 gefundene-notiz-*.txt
 *.lnk
+
+# Local working notes and helper scripts
+HANDOFF.md
+CLAUDE.md
+tools/
