@@ -1494,7 +1494,7 @@ impl App {
                 edited = true;
             }
             VK_ESCAPE => {
-                // Like Spotlight: Esc puts the window away.
+                // Esc puts the window away, like a launcher.
                 self.cmds.push(Cmd::Hide);
                 return true;
             }
