@@ -1,3 +1,7 @@
-﻿target/
+# Build output
+target/
 dist/
+
+# Personal files that do not belong in the repository
 gefundene-notiz-*.txt
+*.lnk

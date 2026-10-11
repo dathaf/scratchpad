@@ -171,7 +171,7 @@ pub fn set_menu_theme(mode: i32) {
     }
 }
 
-// ---------- Plain blur behind the window ("Glas" material) ----------
+// ---------- Plain blur behind the window ("Liquid" material) ----------
 
 #[repr(C)]
 struct AccentPolicy {

@@ -116,7 +116,7 @@ impl App {
                 let spacing = ["Normal", "Mittel", "Weit"][SPACINGS.iter().position(|v| *v >= s.line_spacing).unwrap_or(0)];
                 let mut items = vec![
                     item(Kind::Cycle, "Darstellung", ["Automatisch", "Hell", "Dunkel"][position(&THEMES, &s.theme)], ID_CYCLE_THEME),
-                    item(Kind::Cycle, "Material", ["Acryl", "Mica", "Glas"][position(&MATERIALS, &s.material)], ID_CYCLE_MATERIAL),
+                    item(Kind::Cycle, "Material", ["Acryl", "Mica", "Liquid"][position(&MATERIALS, &s.material)], ID_CYCLE_MATERIAL),
                     MenuItem { level: s.tint.min(100), ..item(Kind::Slider, "Deckkraft", format!("{} %", s.tint.min(100)), ID_TINT_SLIDER) },
                     separator(),
                     item(Kind::Cycle, "Titel", mode(&s.title_mode), ID_CYCLE_TITLE),

@@ -1,7 +1,14 @@
 # Scratchpad (Rust)
 
-Kleines Notizfenster für Windows 11 mit Acryl-/Mica-Hintergrund, direkt gegen die Windows-API
-geschrieben (kein .NET, keine Laufzeitumgebung). Nachfolger der C#-Version in `..\Scratchpad`.
+Kleines Notizfenster für Windows 11 mit durchscheinendem Hintergrund (Acryl, Mica oder Liquid),
+direkt gegen die Windows-API geschrieben (kein .NET, keine Laufzeitumgebung). Nachfolger der
+C#-Version in `..\Scratchpad`.
+
+- eine einzige Notiz, die sich selbst speichert; Aufruf per Tastenkürzel (Standard `Alt` + `X`)
+- Start in etwa 0,1 s, rund 9 MB Arbeitsspeicher, eine `.exe` von etwa 500 KB
+- leichtes Markdown: Überschriften, **fett**, `Code`, abhakbare Listen, anklickbare Links;
+  die Zeichen dafür verschwinden, solange der Cursor woanders steht
+- Suchen und Ersetzen, Schriftart und Zeilenabstand, Titelleiste im Mac- oder Windows-Stil
 
 ## Bauen
 
@@ -47,3 +54,7 @@ setzen und `APPDATA` auf einen leeren Ordner zeigen lassen: Dann läuft eine Tes
 
 Der Code liegt in Git; jede ausgelieferte Version hat eine Marke (`v1.7p`, `v1.8p`, …).
 Mit `git log --oneline` sieht man die Liste, mit `git checkout v1.7p` holt man einen alten Stand zurück.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
