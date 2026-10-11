@@ -1,6 +1,6 @@
 [package]
 name = "scratchpad"
-version = "1.8.2"
+version = "1.8.3"
 license = "MIT"
 edition = "2021"
 

@@ -1,4 +1,4 @@
-//! The app's menus in macOS style: a small layered popup window the app draws itself
+//! The app's own menus: a small layered popup window the app draws itself
 //! (rounded card, soft shadow or glass, accent-coloured highlight). Three menus use it:
 //! the "⋯" menu, the right-click menu in the text and the notification-area menu.
 //!
@@ -180,7 +180,7 @@ impl App {
         let button = self.rect_menu_button();
         let mut anchor = match which {
             Which::Main => {
-                let x = if self.mac_style() { button.right } else { button.left + WIDTH };
+                let x = if self.dots_style() { button.right } else { button.left + WIDTH };
                 let mut point = POINT { x: (x * self.scale()).round() as i32, y: ((button.bottom + 4.0) * self.scale()).round() as i32 };
                 let _ = ClientToScreen(self.hwnd, &mut point);
                 point

@@ -1,4 +1,4 @@
-//! Scratchpad: a tiny always-there note window (Acryl/Mica, macOS- or Windows-style title bar),
+//! Scratchpad: a tiny always-there note window (translucent backdrop, title bar buttons as dots or symbols),
 //! written directly against the Windows API so it starts instantly and needs no runtime.
 
 #![windows_subsystem = "windows"]
@@ -66,7 +66,7 @@ const ID_THEME: usize = 100; // +0 Auto, +1 Light, +2 Dark
 const ID_MATERIAL: usize = 110; // +0 Acrylic, +1 Mica
 const ID_TITLE_MODE: usize = 120; // +0 Always, +1 Hover, +2 Never
 const ID_BUTTONS_MODE: usize = 130;
-const ID_BUTTON_STYLE: usize = 140; // +0 Mac, +1 Windows
+const ID_BUTTON_STYLE: usize = 140; // +0 Dots, +1 Symbols
 const ID_HOTKEY: usize = 150;
 const ID_AUTOSTART: usize = 151;
 const ID_QUIT: usize = 152;
@@ -102,13 +102,13 @@ const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.8.2), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.8.2p";
+/// number without the letter (1.8.3), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.8.3p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
 const MODES: [&str; 3] = ["Always", "Hover", "Never"];
-const STYLES: [&str; 2] = ["Mac", "Windows"];
+const STYLES: [&str; 2] = ["Dots", "Symbols"];
 
 const DWMWA_USE_IMMERSIVE_DARK_MODE_: i32 = 20;
 const DWMWA_SYSTEMBACKDROP_TYPE_: i32 = 38;
@@ -493,8 +493,8 @@ impl App {
         TEXT_TOP + self.search_offset()
     }
 
-    fn mac_style(&self) -> bool {
-        self.settings.button_style != "Windows"
+    fn dots_style(&self) -> bool {
+        self.settings.button_style != "Symbols"
     }
 
     fn buttons_enabled(&self) -> bool {
@@ -511,10 +511,10 @@ impl App {
     }
 
     /// Pin and menu button. They sit at the edge opposite the window buttons: on the right in
-    /// Mac style, on the left in Windows style. `index_from_edge` 0 is the one next to the edge.
+    /// dots style, on the left in symbols style. `index_from_edge` 0 is the one next to the edge.
     fn rect_tool(&self, index_from_edge: usize) -> D2D_RECT_F {
         let offset = 30.0 * index_from_edge as f32;
-        let left = if self.mac_style() { self.w - 10.0 - 28.0 - offset } else { 12.0 + offset };
+        let left = if self.dots_style() { self.w - 10.0 - 28.0 - offset } else { 12.0 + offset };
         rect(left, self.title_center_y() - 12.0, 28.0, 24.0)
     }
 
@@ -544,9 +544,9 @@ impl App {
         if !self.buttons_enabled() {
             return None;
         }
-        let order = if self.mac_style() { [Btn::Close, Btn::Minimize, Btn::Maximize] } else { [Btn::Minimize, Btn::Maximize, Btn::Close] };
+        let order = if self.dots_style() { [Btn::Close, Btn::Minimize, Btn::Maximize] } else { [Btn::Minimize, Btn::Maximize, Btn::Close] };
         for (i, button) in order.into_iter().enumerate() {
-            let hit = if self.mac_style() {
+            let hit = if self.dots_style() {
                 let (cx, cy) = Self::light_center(i);
                 (x - cx).abs() <= 8.0 && (y - cy).abs() <= 8.0
             } else {
@@ -669,7 +669,7 @@ impl App {
 
         let hover = over && y < TITLE_H;
         let hot = if over { self.button_at(x, y) } else { None };
-        let lights = over && self.mac_style() && self.buttons_enabled() && contains(&self.rect_lights(), x, y);
+        let lights = over && self.dots_style() && self.buttons_enabled() && contains(&self.rect_lights(), x, y);
         if hover != self.chrome_hover {
             self.chrome_hover = hover;
             self.update_chrome();
@@ -804,7 +804,7 @@ impl App {
 
     unsafe fn draw_title_bar(&mut self, g: &Gfx) {
         let p = self.pal;
-        let mac = self.mac_style();
+        let dots = self.dots_style();
 
         if self.settings.title_mode != "Never" && self.a_title > 0.01 {
             let color = fade(p.fg, self.a_title * if self.active { 0.85 } else { 0.45 });
@@ -815,7 +815,7 @@ impl App {
 
         let a = self.a_buttons;
         if self.buttons_enabled() && a > 0.01 {
-            if mac {
+            if dots {
                 self.draw_traffic_lights(g, a);
             } else {
                 let maximized = IsZoomed(self.hwnd).as_bool();
@@ -838,7 +838,7 @@ impl App {
 
         let a = self.a_tools;
         if a > 0.01 && self.glass() {
-            // Glass capsule holding pin and menu button, like toolbar groups on macOS.
+            // Glass capsule holding pin and menu button.
             let (pin, menu) = (self.rect_pin_button(), self.rect_menu_button());
             let (left, right) = (pin.left.min(menu.left), pin.right.max(menu.right));
             let capsule = rect(left - 5.0, pin.top - 2.0, right - left + 10.0, 28.0);
@@ -861,7 +861,7 @@ impl App {
         }
     }
 
-    /// macOS-style close / minimise / zoom buttons; the symbols only appear on hover.
+    /// Round close / minimise / zoom buttons; the symbols only appear on hover.
     unsafe fn draw_traffic_lights(&self, g: &Gfx, a: f32) {
         let lights = [
             (Btn::Close, rgb(0xFF, 0x5F, 0x57), rgb(0xE2, 0x46, 0x3F), rgb(0x8C, 0x1A, 0x10)),
@@ -894,7 +894,7 @@ impl App {
         }
     }
 
-    /// Two small triangles pointing to opposite corners, like the macOS zoom button.
+    /// Two small triangles pointing to opposite corners: the zoom symbol.
     unsafe fn draw_zoom_glyph(&self, g: &Gfx, cx: f32, cy: f32, color: Color) {
         let point = |dx: f32, dy: f32| D2D_POINT_2F { x: cx + dx, y: cy + dy };
         let Ok(geometry) = g.factory.CreatePathGeometry() else { return };
@@ -1855,7 +1855,7 @@ impl App {
         if y < 0.0 || y >= TITLE_H {
             return LRESULT(HTCLIENT as isize);
         }
-        if self.button_at(x, y).is_some() || (self.mac_style() && self.buttons_enabled() && contains(&self.rect_lights(), x, y)) {
+        if self.button_at(x, y).is_some() || (self.dots_style() && self.buttons_enabled() && contains(&self.rect_lights(), x, y)) {
             return LRESULT(HTCLIENT as isize);
         }
         // Left, right and bottom still have the invisible system resize frame; the top edge is ours.

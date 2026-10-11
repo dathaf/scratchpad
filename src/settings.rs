@@ -20,7 +20,7 @@ pub struct Settings {
     pub hotkey_key: u32,
     pub title_mode: String,   // Always | Hover | Never
     pub buttons_mode: String, // Always | Hover | Never
-    pub button_style: String, // Mac | Windows
+    pub button_style: String, // Dots | Symbols
     /// Normal (restored) window rectangle in screen pixels: left, top, right, bottom.
     pub win_rect: Option<[i32; 4]>,
     /// Hide the window as soon as another window is activated (unless pinned).
@@ -49,7 +49,7 @@ impl Default for Settings {
             hotkey_key: 0x58,      // X
             title_mode: "Always".into(),
             buttons_mode: "Always".into(),
-            button_style: "Mac".into(),
+            button_style: "Dots".into(),
             win_rect: None,
             auto_hide: false,
             tint: 0,
