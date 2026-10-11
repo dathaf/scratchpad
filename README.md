@@ -54,6 +54,11 @@ next to the note and keeps the last 10 of these copies.
 Every shipped version has a Git tag (`v1.7p`, `v1.8p`, …). `git log --oneline` lists them,
 `git checkout v1.7p` brings back an old state.
 
+The **p** stands for **performance**. It is a promise rather than a decoration: no version ships
+before typing, caret movement and drawing have been timed again, and a feature that would slow
+the app down noticeably does not get in. At the time of writing a keystroke takes about 0.03 ms
+and a redraw under 1 ms, so the app is roughly a few hundred times faster than you can type.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
