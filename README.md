@@ -1,8 +1,7 @@
 # Scratchpad (Rust)
 
 Kleines Notizfenster für Windows 11 mit durchscheinendem Hintergrund (Acryl, Mica oder Liquid),
-direkt gegen die Windows-API geschrieben (kein .NET, keine Laufzeitumgebung). Nachfolger der
-C#-Version in `..\Scratchpad`.
+direkt gegen die Windows-API geschrieben (kein .NET, keine Laufzeitumgebung).
 
 - eine einzige Notiz, die sich selbst speichert; Aufruf per Tastenkürzel (Standard `Alt` + `X`)
 - Start in etwa 0,1 s, rund 9 MB Arbeitsspeicher, eine `.exe` von etwa 500 KB
@@ -35,8 +34,7 @@ Die laufende App vorher mit `Strg` + `Q` beenden, sonst lässt sich die `.exe` n
 
 ## Daten
 
-`%APPDATA%\Scratchpad\scratch.txt` (Notiz) und `settings.json` (Einstellungen), dieselben Dateien
-wie bei der C#-Version. Beide Versionen können nicht gleichzeitig laufen.
+`%APPDATA%\Scratchpad\scratch.txt` (Notiz) und `settings.json` (Einstellungen).
 
 Der Ordner der Notiz lässt sich im Menü unter „Speicherort“ ändern, z. B. auf einen synchronisierten
 Ordner. Ändert ein anderer Rechner die Datei, wird sie beim Aktivieren des Fensters neu geladen;
