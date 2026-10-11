@@ -102,8 +102,8 @@ const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.8.1), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.8.1p";
+/// number without the letter (1.8.2), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.8.2p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];

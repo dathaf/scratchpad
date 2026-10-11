@@ -8,7 +8,7 @@ C#-Version in `..\Scratchpad`.
 - Start in etwa 0,1 s, rund 9 MB Arbeitsspeicher, eine `.exe` von etwa 500 KB
 - leichtes Markdown: Überschriften, **fett**, `Code`, abhakbare Listen, anklickbare Links;
   die Zeichen dafür verschwinden, solange der Cursor woanders steht
-- Suchen und Ersetzen, Schriftart und Zeilenabstand, Titelleiste im Mac- oder Windows-Stil
+- Suchen und Ersetzen, Schriftart und Zeilenabstand, Titelleiste mit runden Knöpfen links oder Symbolen rechts
 
 ## Bauen
 
@@ -26,7 +26,7 @@ Die laufende App vorher mit `Strg` + `Q` beenden, sonst lässt sich die `.exe` n
 | Datei | Inhalt |
 |---|---|
 | `src/main.rs` | Fenster, Titelleiste, Suche, Tray-Symbol, Tastenkürzel, Hintergrundbetrieb |
-| `src/menu.rs` | Das „⋯“-Menü im Mac-Stil (eigenes, selbst gezeichnetes Popup-Fenster) |
+| `src/menu.rs` | Das „⋯“-Menü (eigenes, selbst gezeichnetes Popup-Fenster) |
 | `src/editor.rs` | Textfeld: Cursor, Markieren, Rückgängig, Umbruch, Scrollen (auf DirectWrite) |
 | `src/gfx.rs` | Zeichenfläche: Direct2D in einen Speicherpuffer mit Transparenz |
 | `src/settings.rs` | Einstellungen und Notizdatei |

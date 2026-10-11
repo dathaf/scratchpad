@@ -121,7 +121,7 @@ impl App {
                     separator(),
                     item(Kind::Cycle, "Titel", mode(&s.title_mode), ID_CYCLE_TITLE),
                     item(Kind::Cycle, "Fensterknöpfe", mode(&s.buttons_mode), ID_CYCLE_BUTTONS),
-                    item(Kind::Cycle, "Knopf-Stil", s.button_style.clone(), ID_CYCLE_STYLE),
+                    item(Kind::Cycle, "Knopf-Stil", ["Punkte", "Symbole"][position(&STYLES, &s.button_style)], ID_CYCLE_STYLE),
                     separator(),
                     item(Kind::Cycle, "Schrift", self.font_family(), ID_CYCLE_FONT),
                     item(Kind::Cycle, "Zeilenabstand", spacing, ID_CYCLE_SPACING),
