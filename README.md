@@ -19,7 +19,8 @@ about 9 MB of memory.
   The app keeps running in the notification area.
 - **Light Markdown**: headings, **bold**, `code`, checklists you can tick, links you can open.
   The syntax characters hide while the caret is somewhere else, so the note reads like a document.
-- **Search and replace**, undo and redo, any installed font, adjustable size and line spacing.
+- **Search and replace**, undo and redo, any installed font ("⋯" next to the font opens the
+  system's font list), adjustable size and line spacing.
 - **Translucent backdrop**: Acrylic, Mica or Liquid, with adjustable opacity; light, dark or
   following Windows.
 - **Title bar your way**: round buttons on the left or symbols on the right, shown always, on
@@ -45,10 +46,11 @@ Requires Windows 11 22H2 or newer for the translucent backdrops.
 The exe is not code-signed, because a certificate costs money every year. Windows therefore shows
 a blue SmartScreen warning the first time you start it. Click **More info**, then **Run anyway**.
 
-If you would rather not trust a download: from the version after 1.9.2p on, the exe of every
+If you would rather not trust a download: from version 1.9.3p on, the exe of every
 release is built by GitHub itself from the tagged source (see
 [`.github/workflows/build.yml`](.github/workflows/build.yml); the build log prints its SHA-256
-checksum), or you can build it yourself, see [Building](#building).
+checksum), or you can build it yourself, see [Building](#building). How to report a security
+problem is described in [SECURITY.md](SECURITY.md).
 
 ## Keyboard
 

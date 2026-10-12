@@ -144,6 +144,11 @@ fn parse_markdown(text: &[u16]) -> Markdown {
             0x78 | 0x58 => md.checkbox = Some((indent + 2, true)),
             _ => {}
         }
+        if md.checkbox.is_some() {
+            // The box stands for the list marker, so "- " hides. The span ends at "]": the caret
+            // behind the box (where a task is typed) must not bring the marker back.
+            md.spans.push(Span { from: indent, to: indent + 5, open: 2, close: 0 });
+        }
     }
 
     let mut i = if md.heading > 0 { hashes + 1 } else { 0 };
@@ -1175,6 +1180,18 @@ mod tests {
         assert_eq!(touched(&spans, 0, (14, 14)), 0b11);
         assert_eq!(touched(&spans, 0, (30, 30)), 0);
         assert_eq!(md("# ").spans, vec![]); // nothing to show but the #
+    }
+
+    #[test]
+    fn the_list_marker_of_a_checklist_item_hides() {
+        // "  - [x] da": the "- " hides unless the selection is on the marker or the box
+        let spans = md("  - [x] da").spans;
+        assert_eq!(spans, vec![Span { from: 2, to: 7, open: 2, close: 0 }]);
+        assert_eq!(touched(&spans, 0, (8, 8)), 0); // behind the box, where the task is typed
+        assert_eq!(touched(&spans, 0, (10, 10)), 0);
+        assert_eq!(touched(&spans, 0, (7, 7)), 1);
+        assert_eq!(touched(&spans, 0, (0, 2)), 1);
+        assert_eq!(md("- Punkt").spans, vec![]); // a plain list item keeps its marker
     }
 
     #[test]

@@ -19,6 +19,8 @@ const SHADOW: f32 = 20.0;
 /// Horizontal extent of a slider's track inside its row, measured from the row's edges.
 const SLIDER_LEFT: f32 = 112.0;
 const SLIDER_RIGHT: f32 = 56.0;
+/// Width of the "more" button at the right end of a row that has one.
+const MORE_W: f32 = 28.0;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Which {
@@ -52,6 +54,8 @@ struct MenuItem {
     enabled: bool,
     /// Slider position, 0–100.
     level: u32,
+    /// Command of a small "more" button at the row's right end (0 = none); it closes the menu.
+    more: usize,
 }
 
 pub struct Menu {
@@ -68,10 +72,12 @@ pub struct Menu {
     dpi: f32,
     /// A slider is being dragged.
     dragging: bool,
+    /// The pointer is on the hovered row's "more" button.
+    on_more: bool,
 }
 
 fn item(kind: Kind, label: &'static str, value: impl Into<String>, id: usize) -> MenuItem {
-    MenuItem { kind, label, value: value.into(), id, checked: false, enabled: true, level: 0 }
+    MenuItem { kind, label, value: value.into(), id, checked: false, enabled: true, level: 0, more: 0 }
 }
 
 fn separator() -> MenuItem {
@@ -123,8 +129,7 @@ impl App {
                     item(Kind::Cycle, tr("Fensterknöpfe", "Window buttons"), mode(&s.buttons_mode), ID_CYCLE_BUTTONS),
                     item(Kind::Cycle, tr("Knopf-Stil", "Button style"), [tr("Punkte", "Dots"), tr("Symbole", "Symbols")][position(&STYLES, &s.button_style)], ID_CYCLE_STYLE),
                     separator(),
-                    item(Kind::Cycle, tr("Schrift", "Font"), self.font_family(), ID_CYCLE_FONT),
-                    item(Kind::Action, tr("Andere Schrift …", "Other font …"), "", ID_FONT_PICK),
+                    MenuItem { more: ID_FONT_PICK, ..item(Kind::Cycle, tr("Schrift", "Font"), self.font_family(), ID_CYCLE_FONT) },
                     item(Kind::Cycle, tr("Zeilenabstand", "Line spacing"), spacing, ID_CYCLE_SPACING),
                     check(tr("Markdown-Formatierung", "Markdown styling"), ID_MARKDOWN, s.markdown),
                     separator(),
@@ -220,7 +225,7 @@ impl App {
         let y = (anchor.y - shadow).min(work.bottom + shadow - height).max(work.top - shadow);
 
         let Ok(gfx) = Gfx::new(prepared, self.menu_hwnd, width as u32, height as u32, dpi) else { return };
-        self.menu = Some(Menu { which, items, hover: None, gfx, origin: POINT { x, y }, margin, dpi, dragging: false });
+        self.menu = Some(Menu { which, items, hover: None, gfx, origin: POINT { x, y }, margin, dpi, dragging: false, on_more: false });
         self.menu_open = which == Which::Main; // keeps the title bar visible while its menu is open
         self.draw_menu();
         if takes_focus {
@@ -278,8 +283,14 @@ impl App {
             let row = rect(card.left + 5.0, y, WIDTH - 10.0, ROW_H);
             // A slider is operated by dragging, so it gets no "click me" highlight.
             let hot = menu.hover == Some(index) && item.enabled && item.kind != Kind::Slider;
+            // On the "more" button only the button lights up, so it reads as a target of its own.
+            let more = rect(row.right - MORE_W, y + 2.0, MORE_W - 2.0, ROW_H - 4.0);
+            let on_more = hot && menu.on_more && item.more != 0;
+            let hot = hot && !on_more;
             if hot {
                 g.fill_round(row, 5.0, p.highlight);
+            } else if on_more {
+                g.fill_round(more, 4.0, p.highlight);
             }
             let (text, secondary) = if hot {
                 (rgb(255, 255, 255), gray(0xD0, 0xFF))
@@ -292,8 +303,13 @@ impl App {
                 g.text("\u{E73E}", &self.fonts.icon_small, rect(row.left + 4.0, y, 18.0, ROW_H), text, DWRITE_TEXT_ALIGNMENT_CENTER);
             }
             g.text(item.label, &self.fonts.search, rect(row.left + 24.0, y, WIDTH - 44.0, ROW_H), text, DWRITE_TEXT_ALIGNMENT_LEADING);
+            let reserved = if item.more != 0 { MORE_W - 6.0 } else { 0.0 };
             if !item.value.is_empty() {
-                g.text(&item.value, &self.fonts.search, rect(row.left + 24.0, y, WIDTH - 46.0, ROW_H), secondary, DWRITE_TEXT_ALIGNMENT_TRAILING);
+                g.text(&item.value, &self.fonts.search, rect(row.left + 24.0, y, WIDTH - 46.0 - reserved, ROW_H), secondary, DWRITE_TEXT_ALIGNMENT_TRAILING);
+            }
+            if item.more != 0 {
+                let color = if on_more { rgb(255, 255, 255) } else { text };
+                g.text("\u{E712}", &self.fonts.icon_small, more, color, DWRITE_TEXT_ALIGNMENT_CENTER);
             }
             if item.kind == Kind::Slider {
                 let (left, right, middle) = (row.left + SLIDER_LEFT, row.right - SLIDER_RIGHT, y + ROW_H / 2.0);
@@ -327,10 +343,11 @@ impl App {
         None
     }
 
-    unsafe fn set_menu_hover(&mut self, hover: Option<usize>) {
+    unsafe fn set_menu_hover(&mut self, hover: Option<usize>, on_more: bool) {
         if let Some(menu) = &mut self.menu {
-            if menu.hover != hover {
+            if menu.hover != hover || menu.on_more != on_more {
                 menu.hover = hover;
+                menu.on_more = on_more;
                 self.draw_menu();
             }
         }
@@ -428,10 +445,16 @@ impl App {
             None
         };
         let kind = hover.map(|i| rows[i].0);
+        let more = hover.and_then(|i| menu.items.get(i)).map_or(0, |i| i.more);
         match VIRTUAL_KEY(vk as u16) {
             VK_ESCAPE => self.close_menu(),
-            VK_DOWN => self.set_menu_hover(step(true)),
-            VK_UP => self.set_menu_hover(step(false)),
+            VK_DOWN => self.set_menu_hover(step(true), false),
+            VK_UP => self.set_menu_hover(step(false), false),
+            // The keyboard's way to a row's "more" button; Space and the arrows step the value.
+            VK_RETURN if more != 0 => {
+                self.close_menu();
+                self.on_command(more);
+            }
             VK_LEFT | VK_RIGHT if kind == Some(Kind::Slider) => {
                 self.set_slider(hover.unwrap(), None, if vk == VK_RIGHT.0 as u32 { 5 } else { -5 });
                 self.settings.save();
@@ -453,6 +476,8 @@ impl App {
         let (x, y) = (loword(lparam.0) as f32 / scale, hiword(lparam.0) as f32 / scale);
         let (dragging, hover, takes_focus) = (menu.dragging, menu.hover, menu.which == Which::Tray);
         let row = self.menu_row_at(x, y);
+        let more = row.and_then(|i| menu.items.get(i)).map_or(0, |i| i.more);
+        let on_more = more != 0 && x >= menu.margin + WIDTH - 5.0 - MORE_W;
         let is_slider = |app: &App, index: Option<usize>| {
             index.and_then(|i| app.menu.as_ref()?.items.get(i)).is_some_and(|i| i.kind == Kind::Slider)
         };
@@ -466,9 +491,9 @@ impl App {
                     dwHoverTime: 0,
                 };
                 let _ = TrackMouseEvent(&mut track);
-                self.set_menu_hover(row);
+                self.set_menu_hover(row, on_more);
             }
-            WM_MOUSELEAVE if !dragging => self.set_menu_hover(None),
+            WM_MOUSELEAVE if !dragging => self.set_menu_hover(None, false),
             WM_LBUTTONDOWN if is_slider(self, row) => {
                 SetCapture(self.menu_hwnd);
                 if let Some(menu) = &mut self.menu {
@@ -483,6 +508,10 @@ impl App {
                 }
                 let _ = ReleaseCapture();
                 self.settings.save();
+            }
+            WM_LBUTTONUP if on_more => {
+                self.close_menu();
+                self.on_command(more);
             }
             WM_LBUTTONUP => {
                 if let Some(index) = row {
