@@ -1,6 +1,6 @@
 //! The app's own menus: a small layered popup window the app draws itself
 //! (rounded card, soft shadow or glass, accent-coloured highlight). Three menus use it:
-//! the "⋯" menu, the right-click menu in the text and the notification-area menu.
+//! the settings menu (gear button), the right-click menu in the text and the notification-area menu.
 //!
 //! The first two never take the keyboard focus (the main window stays active and forwards
 //! keys); the notification-area menu has no active main window to rely on, so it is
@@ -290,7 +290,7 @@ impl App {
             if hot {
                 g.fill_round(row, 5.0, p.highlight);
             } else if on_more {
-                g.fill_round(more, 4.0, p.highlight);
+                g.fill_round(more, 6.0, p.hover); // like the title bar's own buttons
             }
             let (text, secondary) = if hot {
                 (rgb(255, 255, 255), gray(0xD0, 0xFF))
@@ -308,7 +308,7 @@ impl App {
                 g.text(&item.value, &self.fonts.search, rect(row.left + 24.0, y, WIDTH - 46.0 - reserved, ROW_H), secondary, DWRITE_TEXT_ALIGNMENT_TRAILING);
             }
             if item.more != 0 {
-                let color = if on_more { rgb(255, 255, 255) } else { text };
+                let color = if on_more { p.fg } else if hot { text } else { p.muted };
                 g.text("\u{E712}", &self.fonts.icon_small, more, color, DWRITE_TEXT_ALIGNMENT_CENTER);
             }
             if item.kind == Kind::Slider {

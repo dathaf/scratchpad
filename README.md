@@ -143,7 +143,7 @@ empty folder: a test copy then runs beside the real app without touching the rea
 | File | Contents |
 |---|---|
 | `src/main.rs` | Window, title bar, search, tray icon, hotkeys, running in the background |
-| `src/menu.rs` | The "⋯" menu (the app's own, self-drawn popup window) |
+| `src/menu.rs` | The settings menu (the app's own, self-drawn popup window) |
 | `src/editor.rs` | Text field: caret, selection, undo, wrapping, scrolling, Markdown (on DirectWrite) |
 | `src/gfx.rs` | Drawing surface: Direct2D into a memory buffer with transparency |
 | `src/settings.rs` | Settings, the note file and its backups |

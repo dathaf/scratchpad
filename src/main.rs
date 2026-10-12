@@ -108,8 +108,8 @@ const ID_REPLACE: usize = 196;
 const ID_FONT_PICK: usize = 197;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.9.3), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.9.3p";
+/// number without the letter (1.9.4), because Cargo does not accept a suffix like this.
+const VERSION: &str = "1.9.4p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -377,7 +377,7 @@ struct App {
     /// Pre-rendered light fade for the glass look (for dark theme?, strip); belongs to `gfx`.
     sheen: Option<(bool, ID2D1Bitmap)>,
 
-    /// The "⋯" menu: its popup window is created on first use and then reused.
+    /// The settings menu: its popup window is created on first use and then reused.
     menu_hwnd: HWND,
     menu: Option<menu::Menu>,
     /// Address of the RefCell holding this App, handed to further windows of the app.
@@ -859,7 +859,7 @@ impl App {
         if a > 0.01 {
             let tools = [
                 (Btn::Pin, self.rect_pin_button(), if self.settings.topmost { "\u{E840}" } else { "\u{E718}" }, self.settings.topmost),
-                (Btn::Menu, self.rect_menu_button(), "\u{E712}", self.menu_open),
+                (Btn::Menu, self.rect_menu_button(), "\u{E713}", self.menu_open),
             ];
             for (button, r, glyph, checked) in tools {
                 let hot = self.hot == Some(button);
@@ -2356,7 +2356,7 @@ unsafe fn run() -> Result<()> {
         ..Default::default()
     };
     RegisterClassExW(&class);
-    // Popup window of the "⋯" menu (see menu.rs); CS_DROPSHADOW is not needed, it draws its own.
+    // Popup window of the settings menu (see menu.rs); CS_DROPSHADOW is not needed, it draws its own.
     let menu_class = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
         lpfnWndProc: Some(menu::menu_wndproc),
