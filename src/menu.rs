@@ -105,6 +105,7 @@ impl App {
                     item(Kind::Action, tr("Einfügen", "Paste"), tr("Strg + V", "Ctrl + V"), ID_PASTE),
                     separator(),
                     item(Kind::Action, tr("Alles auswählen", "Select all"), tr("Strg + A", "Ctrl + A"), ID_SELECT_ALL),
+                    item(Kind::Action, if selection { tr("Auswahl duplizieren", "Duplicate selection") } else { tr("Zeile duplizieren", "Duplicate line") }, tr("Strg + D", "Ctrl + D"), ID_DUPLICATE),
                 ]
             }
             Which::Tray => vec![
@@ -132,6 +133,7 @@ impl App {
                     MenuItem { more: ID_FONT_PICK, ..item(Kind::Cycle, tr("Schrift", "Font"), self.font_family(), ID_CYCLE_FONT) },
                     item(Kind::Cycle, tr("Zeilenabstand", "Line spacing"), spacing, ID_CYCLE_SPACING),
                     check(tr("Markdown-Formatierung", "Markdown styling"), ID_MARKDOWN, s.markdown),
+                    check(tr("Klammern automatisch schließen", "Close brackets automatically"), ID_AUTO_PAIRS, s.auto_pairs),
                     separator(),
                     item(Kind::Action, tr("Suchen …", "Find …"), tr("Strg + F", "Ctrl + F"), ID_FIND),
                     item(Kind::Action, tr("Ersetzen …", "Replace …"), tr("Strg + H", "Ctrl + H"), ID_REPLACE),

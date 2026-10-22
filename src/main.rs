@@ -77,6 +77,7 @@ const ID_CUT: usize = 160;
 const ID_COPY: usize = 161;
 const ID_PASTE: usize = 162;
 const ID_SELECT_ALL: usize = 163;
+const ID_DUPLICATE: usize = 164;
 const ID_OPEN: usize = 170;
 const ID_LANGUAGE: usize = 180; // +0 German, +1 English
 
@@ -106,10 +107,11 @@ const ID_CYCLE_LANGUAGE: usize = 209;
 const ID_MARKDOWN: usize = 195;
 const ID_REPLACE: usize = 196;
 const ID_FONT_PICK: usize = 197;
+const ID_AUTO_PAIRS: usize = 198;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (1.9.4), because Cargo does not accept a suffix like this.
-const VERSION: &str = "1.9.4p";
+/// number without the letter (2.0.0), because Cargo does not accept a suffix like this.
+const VERSION: &str = "2.0p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -1515,6 +1517,10 @@ impl App {
                     self.editor.toggle_bold();
                     edited = true;
                 }
+                0x44 => {
+                    self.editor.duplicate();
+                    edited = true;
+                }
                 0x41 => self.editor.select_all(),
                 0x43 => self.copy(),
                 0x58 => {
@@ -1561,7 +1567,7 @@ impl App {
             self.edit_search_field(|field| field.push(c));
             return;
         }
-        self.editor.insert(&[c], Edit::Type);
+        self.editor.type_char(c, self.settings.auto_pairs);
         self.after_edit();
     }
 
@@ -1836,10 +1842,15 @@ impl App {
             ID_COPY => self.copy(),
             ID_PASTE => self.paste(),
             ID_SELECT_ALL => self.editor.select_all(),
+            ID_DUPLICATE => {
+                self.editor.duplicate();
+                self.after_edit();
+            }
             ID_MARKDOWN => {
                 self.settings.markdown = !self.settings.markdown;
                 self.apply_font();
             }
+            ID_AUTO_PAIRS => self.settings.auto_pairs = !self.settings.auto_pairs,
             ID_FIND => self.open_search(false),
             ID_REPLACE => self.open_search(true),
             ID_AUTO_HIDE => self.settings.auto_hide = !self.settings.auto_hide,

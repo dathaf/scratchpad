@@ -209,6 +209,23 @@ pub struct Editor {
     markdown: bool,
     /// Extra ranges to mark (search hits), as (start, end), sorted by position.
     pub highlights: Vec<(usize, usize)>,
+    /// A closing bracket offered after a typed opening one: (position, character). It is only
+    /// drawn, dimmed, and becomes text once something is typed between the pair.
+    ghost: Option<(usize, u16)>,
+    /// Positions of the closing brackets the editor added itself; typing one there steps over it.
+    closers: Vec<usize>,
+}
+
+/// The closing partner of a bracket or quote that is completed automatically.
+fn closer_of(c: u16) -> Option<u16> {
+    match c {
+        0x28 => Some(0x29), // ( )
+        0x5B => Some(0x5D), // [ ]
+        0x7B => Some(0x7D), // { }
+        0x3C => Some(0x3E), // < >
+        0x22 => Some(0x22), // " "
+        _ => None,
+    }
 }
 
 /// Splits text into paragraphs as (start, length). There is always at least one; a trailing
@@ -306,6 +323,7 @@ impl Editor {
             paras: Vec::new(), tops: Vec::new(), total_height: 0.0, tops_valid: false,
             desired_x: None, undo: Vec::new(), redo: Vec::new(), last_edit: Edit::None, last_edit_time: Instant::now(),
             link_brush: None, muted_brush: None, line_spacing: 0.0, markdown: true, highlights: Vec::new(),
+            ghost: None, closers: Vec::new(),
         };
         editor.rebuild_paragraphs(None);
         editor
@@ -744,9 +762,11 @@ impl Editor {
         self.caret = end.min(self.text.len());
         self.desired_x = None;
         self.last_edit = Edit::None;
+        self.ghost = None;
     }
 
     fn move_to(&mut self, index: usize, extend: bool) {
+        self.ghost = None;
         self.caret = index.min(self.text.len());
         if !extend {
             self.anchor = self.caret;
@@ -818,6 +838,7 @@ impl Editor {
     }
 
     pub fn select_all(&mut self) {
+        self.ghost = None;
         self.anchor = 0;
         self.caret = self.text.len();
         self.last_edit = Edit::None;
@@ -840,6 +861,7 @@ impl Editor {
         self.anchor = start;
         self.caret = end;
         self.desired_x = None;
+        self.ghost = None;
     }
 
     // ---------- Editing ----------
@@ -865,6 +887,18 @@ impl Editor {
     fn changed(&mut self, edit: Option<(usize, usize, usize)>) {
         self.rebuild_paragraphs(edit);
         self.desired_x = None;
+        self.ghost = None;
+        // Added closing brackets move with the text; one inside a changed stretch is forgotten.
+        match edit {
+            Some((pos, removed, inserted)) => self.closers.retain_mut(|at| {
+                let behind = pos + removed <= *at;
+                if behind {
+                    *at = *at - removed + inserted;
+                }
+                behind || pos > *at
+            }),
+            None => self.closers.clear(),
+        }
     }
 
     fn remove_range(&mut self, start: usize, end: usize) {
@@ -881,6 +915,83 @@ impl Editor {
         self.caret = start + s.len();
         self.anchor = self.caret;
         self.changed(Some((start, end - start, s.len())));
+    }
+
+    /// A typed character. With `pairs` on, an opening bracket or quote offers its closing
+    /// partner as a ghost, which turns into text with the next character typed in between.
+    pub fn type_char(&mut self, c: u16, pairs: bool) {
+        if !pairs {
+            self.insert(&[c], Edit::Type);
+            return;
+        }
+        let selected = self.has_selection();
+        if !selected && self.closers.contains(&self.caret) && self.text.get(self.caret) == Some(&c) {
+            self.move_to(self.caret + 1, false);
+            self.closers.retain(|&at| at != self.caret - 1);
+            return;
+        }
+        if let Some((at, close)) = self.ghost.filter(|g| g.0 == self.caret && !selected) {
+            // A space or the partner itself right after the opening one keeps the plain text.
+            if c == close || c == 0x20 {
+                self.insert(&[c], Edit::Type);
+                return;
+            }
+            self.insert(&[close], Edit::Type);
+            self.caret = at;
+            self.anchor = at;
+            self.closers.push(at);
+            if closer_of(c).is_none() {
+                self.insert(&[c], Edit::Type);
+                return;
+            }
+            // Another opening bracket goes on below and offers its own partner.
+        }
+        let Some(close) = closer_of(c) else {
+            self.insert(&[c], Edit::Type);
+            return;
+        };
+        let (start, end) = self.selection();
+        if selected {
+            let mut wrapped = vec![c];
+            wrapped.extend_from_slice(&self.text[start..end]);
+            wrapped.push(close);
+            self.insert(&wrapped, Edit::Other);
+            self.select_range(start + 1, end + 1);
+            return;
+        }
+        // Only where a pair makes sense: not in front of a word, and no quote or "<" right
+        // after one (inches, "a<b").
+        let free = self.text.get(start).map_or(true, |&n| matches!(n, 9 | NEWLINE | 0x20 | 0x29 | 0x5D | 0x7D | 0x3E | 0x22));
+        let after_word = matches!(c, 0x22 | 0x3C) && start > 0 && class_of(self.text[start - 1]) == CharClass::Word;
+        self.insert(&[c], Edit::Type);
+        if free && !after_word {
+            self.ghost = Some((self.caret, close));
+        }
+    }
+
+    /// The closing bracket offered after the caret, if any.
+    pub fn ghost(&self) -> Option<u16> {
+        self.ghost.filter(|g| g.0 == self.caret && !self.has_selection()).map(|g| g.1)
+    }
+
+    /// Ctrl+D: copies the caret's line below itself and moves the caret into the copy. With a
+    /// selection, the selected text is copied right behind it and the copy gets selected.
+    pub fn duplicate(&mut self) {
+        let (start, end) = self.selection();
+        let (at, copy, target) = if start != end {
+            (end, self.text[start..end].to_vec(), (end, end + end - start))
+        } else {
+            let para = self.para_of(self.caret);
+            let (from, len) = (self.paras[para].start, self.paras[para].len);
+            let mut copy = vec![NEWLINE];
+            copy.extend_from_slice(&self.text[from..from + len]);
+            let caret = self.caret + len + 1;
+            (from + len, copy, (caret, caret))
+        };
+        self.checkpoint(Edit::Other);
+        self.text.splice(at..at, copy.iter().copied());
+        self.changed(Some((at, 0, copy.len())));
+        self.select_range(target.0, target.1);
     }
 
     pub fn delete_selection(&mut self) -> bool {
@@ -902,6 +1013,12 @@ impl Editor {
             return false;
         }
         self.checkpoint(Edit::Delete);
+        // An empty pair whose closing half the editor added goes as a whole.
+        let pair = !word && self.closers.contains(&self.caret) && closer_of(self.text[start]).is_some_and(|c| self.text.get(self.caret) == Some(&c));
+        if pair {
+            self.remove_range(start, self.caret + 1);
+            return true;
+        }
         self.remove_range(start, self.caret);
         true
     }
@@ -991,6 +1108,45 @@ impl Editor {
         }
     }
 
+    /// Baseline of the wrapped line holding a paragraph offset, from the line's top.
+    unsafe fn baseline_at(layout: &IDWriteTextLayout, local: usize) -> f32 {
+        let mut count = 0u32;
+        let _ = layout.GetLineMetrics(None, &mut count);
+        let mut metrics = vec![DWRITE_LINE_METRICS::default(); count as usize];
+        if count == 0 || layout.GetLineMetrics(Some(&mut metrics), &mut count).is_err() {
+            return 0.0;
+        }
+        let mut line_start = 0;
+        for line in &metrics {
+            line_start += line.length as usize;
+            if local < line_start {
+                return line.baseline;
+            }
+        }
+        metrics[metrics.len() - 1].baseline
+    }
+
+    /// The offered closing bracket, dimmed, right behind the caret in the size of the opening one.
+    unsafe fn draw_ghost(&mut self, g: &Gfx, close: u16, x: f32, origin: f32, brush: &ID2D1SolidColorBrush) {
+        let (cx, cy, _) = self.position_of(self.caret);
+        let para = self.para_of(self.caret);
+        let layout = self.layout(para);
+        let local = self.caret - self.paras[para].start;
+        let Ok(ghost) = self.dwrite.CreateTextLayout(&[close], &self.format, 1000.0, 1000.0) else { return };
+        let whole = DWRITE_TEXT_RANGE { startPosition: 0, length: 1 };
+        let mut size = 0.0;
+        let at = local.saturating_sub(1) as u32;
+        if layout.GetFontSize(at, &mut size, None).is_ok() && size > 0.0 {
+            let _ = ghost.SetFontSize(size, whole);
+        }
+        let mut weight = DWRITE_FONT_WEIGHT_NORMAL;
+        if layout.GetFontWeight(at, &mut weight, None).is_ok() {
+            let _ = ghost.SetFontWeight(weight, whole);
+        }
+        let y = cy + Self::baseline_at(&layout, local) - Self::baseline_at(&ghost, 0);
+        g.dc.DrawTextLayout(D2D_POINT_2F { x: x + cx, y: origin + y }, &ghost, brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+    }
+
     /// Draws highlights, selection, text and caret. (x, y) is where the top of the text goes
     /// when not scrolled; only paragraphs between `view_top` and `view_bottom` are drawn.
     pub unsafe fn draw(&mut self, g: &Gfx, x: f32, y: f32, view_top: f32, view_bottom: f32,
@@ -1035,6 +1191,10 @@ impl Editor {
 
             g.brush.SetColor(&text_color);
             g.dc.DrawTextLayout(D2D_POINT_2F { x, y: top }, &layout, &g.brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+        }
+
+        if let (Some(close), Some(brush)) = (self.ghost(), self.muted_brush.clone()) {
+            self.draw_ghost(g, close, x, origin, &brush);
         }
 
         if let Some(color) = caret_color {
@@ -1199,5 +1359,94 @@ mod tests {
         let text: Vec<u16> = "siehe https://example.com/a?b=1, und (www.test.at).".encode_utf16().collect();
         let found: Vec<String> = find_links(&text).iter().map(|&(a, b)| String::from_utf16_lossy(&text[a..b])).collect();
         assert_eq!(found, vec!["https://example.com/a?b=1", "www.test.at"]);
+    }
+
+    fn editor(text: &str) -> Editor {
+        unsafe {
+            let dwrite: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let format = dwrite.CreateTextFormat(windows::core::w!("Consolas"), None, DWRITE_FONT_WEIGHT_NORMAL,
+                DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 14.0, windows::core::w!("de-de")).unwrap();
+            Editor::new(dwrite, format, text)
+        }
+    }
+
+    fn type_text(e: &mut Editor, text: &str) {
+        for c in text.encode_utf16() {
+            e.type_char(c, true);
+        }
+    }
+
+    #[test]
+    fn a_bracket_closes_once_something_is_typed_inside() {
+        let mut e = editor("");
+        type_text(&mut e, "(");
+        assert_eq!((e.text_string().as_str(), e.ghost()), ("(", Some(0x29))); // only offered
+        type_text(&mut e, "ab");
+        assert_eq!((e.text_string().as_str(), e.caret), ("(ab)", 3));
+        type_text(&mut e, ")"); // steps over the added one
+        assert_eq!((e.text_string().as_str(), e.caret), ("(ab)", 4));
+
+        let mut e = editor("");
+        type_text(&mut e, "[{x");
+        assert_eq!(e.text_string(), "[{x}]");
+        type_text(&mut e, "}]!");
+        assert_eq!(e.text_string(), "[{x}]!");
+
+        let mut e = editor("");
+        type_text(&mut e, "()"); // typed by hand: no doubled partner
+        assert_eq!(e.text_string(), "()");
+        let mut e = editor("");
+        type_text(&mut e, "\"zitat\"");
+        assert_eq!(e.text_string(), "\"zitat\"");
+    }
+
+    #[test]
+    fn no_pair_where_it_would_get_in_the_way() {
+        let mut e = editor("wort");
+        e.set_caret(0, false);
+        type_text(&mut e, "(x"); // in front of a word
+        assert_eq!(e.text_string(), "(xwort");
+        let mut e = editor("");
+        type_text(&mut e, "a < b, 5\" x<y, ( c");
+        assert_eq!(e.text_string(), "a < b, 5\" x<y, ( c");
+        let mut e = editor("");
+        e.type_char(0x28, true);
+        e.move_left(false, false); // moving away drops the offer
+        assert_eq!(e.ghost(), None);
+    }
+
+    #[test]
+    fn brackets_wrap_a_selection_and_go_as_a_pair() {
+        let mut e = editor("wort");
+        e.select_all();
+        type_text(&mut e, "(");
+        assert_eq!((e.text_string().as_str(), e.selection()), ("(wort)", (1, 5)));
+        let mut e = editor("");
+        type_text(&mut e, "(a");
+        assert!(e.backspace(false));
+        assert_eq!(e.text_string(), "()");
+        assert!(e.backspace(false)); // the empty pair goes as a whole
+        assert_eq!(e.text_string(), "");
+        let mut e = editor("");
+        type_text(&mut e, "(a");
+        assert!(e.undo());
+        assert_eq!(e.text_string(), "");
+    }
+
+    #[test]
+    fn duplicate_copies_the_line_or_the_selection() {
+        let mut e = editor("eins\nzwei\ndrei");
+        e.set_caret(7, false); // "zw|ei"
+        e.duplicate();
+        assert_eq!((e.text_string().as_str(), e.caret), ("eins\nzwei\nzwei\ndrei", 12));
+        let mut e = editor("ab");
+        e.duplicate(); // last line without a line break
+        assert_eq!((e.text_string().as_str(), e.caret), ("ab\nab", 5));
+        let mut e = editor("abc");
+        e.select_range(0, 2);
+        e.duplicate();
+        assert_eq!((e.text_string().as_str(), e.selection()), ("ababc", (2, 4)));
+        assert!(e.undo());
+        assert_eq!(e.text_string(), "abc");
     }
 }

@@ -35,6 +35,8 @@ pub struct Settings {
     pub line_spacing: f32,
     /// Style headings, checklists, bold and code written in Markdown.
     pub markdown: bool,
+    /// Close brackets and quotes automatically (offered dimmed first).
+    pub auto_pairs: bool,
     pub language: String, // German | English
 }
 
@@ -58,6 +60,7 @@ impl Default for Settings {
             font: None,
             line_spacing: 0.0,
             markdown: true,
+            auto_pairs: true,
             language: if crate::sys::system_is_german() { "German" } else { "English" }.into(),
         }
     }

@@ -25,6 +25,8 @@ about 9 MB of memory.
   following Windows.
 - **Title bar your way**: round buttons on the left or symbols on the right, shown always, on
   hover or never.
+- **Brackets that close themselves**: after `(`, `[`, `{`, `<` or `"` the partner shows dimmed
+  and becomes text as soon as you type inside; `Ctrl` + `D` duplicates a line. Can be switched off.
 - **Daily backups**: the first save of a day keeps yesterday's note; the last 10 days stay.
 - **German or English** interface.
 
@@ -60,6 +62,7 @@ problem is described in [SECURITY.md](SECURITY.md).
 | `Esc` | Hide the window |
 | `Ctrl` + `F` / `Ctrl` + `H` | Find / replace |
 | `Enter`, `F3`, `↓` / `Shift` + `Enter`, `↑` | Next / previous match |
+| `Ctrl` + `D` | Duplicate the line (or the selection) |
 | `Ctrl` + `B` | Make the selection bold |
 | `Ctrl` + `Enter` | Tick or untick the checklist item in the caret's line |
 | `Ctrl` + click | Open the link under the pointer |
