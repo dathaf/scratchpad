@@ -26,7 +26,8 @@ about 9 MB of memory.
 - **Title bar your way**: round buttons on the left or symbols on the right, shown always, on
   hover or never.
 - **Brackets that close themselves**: after `(`, `[`, `{`, `<` or `"` the partner shows dimmed
-  and becomes text as soon as you type inside; `Ctrl` + `D` duplicates a line. Can be switched off.
+  and becomes text as soon as you type inside. Can be switched off.
+- **Line tools**: duplicate, move, delete and indent whole lines from the keyboard.
 - **Daily backups**: the first save of a day keeps yesterday's note; the last 10 days stay.
 - **German or English** interface.
 
@@ -63,6 +64,9 @@ problem is described in [SECURITY.md](SECURITY.md).
 | `Ctrl` + `F` / `Ctrl` + `H` | Find / replace |
 | `Enter`, `F3`, `↓` / `Shift` + `Enter`, `↑` | Next / previous match |
 | `Ctrl` + `D` | Duplicate the line (or the selection) |
+| `Alt` + `↑` / `↓` | Move the line (or the selected lines) up / down |
+| `Ctrl` + `Shift` + `K` | Delete the line (or the selected lines) |
+| `Tab` / `Shift` + `Tab` | With several lines selected: indent / outdent them |
 | `Ctrl` + `B` | Make the selection bold |
 | `Ctrl` + `Enter` | Tick or untick the checklist item in the caret's line |
 | `Ctrl` + click | Open the link under the pointer |

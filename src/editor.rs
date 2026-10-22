@@ -994,6 +994,110 @@ impl Editor {
         self.select_range(target.0, target.1);
     }
 
+    /// First and last paragraph the selection covers. A selection ending at the very start of a
+    /// line does not take that line along.
+    fn selected_paras(&self) -> (usize, usize) {
+        let (start, end) = self.selection();
+        let first = self.para_of(start);
+        let mut last = self.para_of(end);
+        if last > first && self.paras[last].start == end {
+            last -= 1;
+        }
+        (first, last)
+    }
+
+    /// Alt+Up / Alt+Down: swaps the selected lines with the line above or below them.
+    pub fn move_selected_lines(&mut self, up: bool) -> bool {
+        let (first, last) = self.selected_paras();
+        if (up && first == 0) || (!up && last + 1 >= self.paras.len()) {
+            return false;
+        }
+        let bounds = |p: &Para| (p.start, p.start + p.len);
+        let (from, _) = bounds(&self.paras[first]);
+        let (_, to) = bounds(&self.paras[last]);
+        let (other_from, other_to) = bounds(&self.paras[if up { first - 1 } else { last + 1 }]);
+        let (block, other) = (&self.text[from..to], &self.text[other_from..other_to]);
+        let (range, parts) = if up { (other_from..to, [block, other]) } else { (from..other_to, [other, block]) };
+        let swapped = [parts[0], &[NEWLINE], parts[1]].concat();
+        let shift = other.len() + 1;
+        let (anchor, caret) = if up { (self.anchor - shift, self.caret - shift) } else { (self.anchor + shift, self.caret + shift) };
+        self.checkpoint(Edit::Other);
+        let removed = range.len();
+        self.text.splice(range.clone(), swapped.iter().copied());
+        self.changed(Some((range.start, removed, swapped.len())));
+        self.anchor = anchor;
+        self.caret = caret;
+        true
+    }
+
+    /// Ctrl+Shift+K: removes the selected lines (or the caret's line) with their line break.
+    pub fn delete_lines(&mut self) -> bool {
+        let (first, last) = self.selected_paras();
+        let from = self.paras[first].start;
+        let to = self.paras[last].start + self.paras[last].len;
+        let (a, b) = if last + 1 < self.paras.len() { (from, to + 1) } else if first > 0 { (from - 1, to) } else { (from, to) };
+        if a == b {
+            return false;
+        }
+        self.checkpoint(Edit::Other);
+        self.remove_range(a, b);
+        let line = self.paras[self.para_of(a)].start;
+        self.anchor = line;
+        self.caret = line;
+        true
+    }
+
+    /// Changes the start of every selected line in one undo step. `f` gets a line and returns
+    /// how many characters to remove at its start and what to put there instead.
+    fn edit_line_starts(&mut self, f: impl Fn(&[u16]) -> (usize, &'static [u16])) -> bool {
+        let (first, last) = self.selected_paras();
+        let from = self.paras[first].start;
+        let to = self.paras[last].start + self.paras[last].len;
+        let mut block = Vec::with_capacity(to - from + last - first + 1);
+        let mut edits = Vec::new();
+        for para in &self.paras[first..=last] {
+            let line = &self.text[para.start..para.start + para.len];
+            if para.start > from {
+                block.push(NEWLINE);
+            }
+            let (removed, inserted) = f(line);
+            block.extend_from_slice(inserted);
+            block.extend_from_slice(&line[removed..]);
+            if removed > 0 || !inserted.is_empty() {
+                edits.push((para.start, removed, inserted.len()));
+            }
+        }
+        if edits.is_empty() {
+            return false;
+        }
+        // A position moves by what changed in front of it; one at a line start stays there.
+        let map = |p: usize| edits.iter().filter(|e| e.0 < p).fold(p, |p2, &(at, removed, inserted)| p2 + inserted - removed.min(p - at));
+        let (anchor, caret) = (map(self.anchor), map(self.caret));
+        self.checkpoint(Edit::Other);
+        self.text.splice(from..to, block.iter().copied());
+        self.changed(Some((from, to - from, block.len())));
+        self.anchor = anchor;
+        self.caret = caret;
+        true
+    }
+
+    /// Tab with a selection over several lines: puts a tab in front of each of them.
+    pub fn indent(&mut self) -> bool {
+        let (first, last) = self.selected_paras();
+        if first == last {
+            return false;
+        }
+        self.edit_line_starts(|line| (0, if line.is_empty() { &[] } else { &[9] }))
+    }
+
+    /// Shift+Tab: takes one tab, or up to four spaces, from the start of the selected lines.
+    pub fn outdent(&mut self) -> bool {
+        self.edit_line_starts(|line| match line.first() {
+            Some(9) => (1, &[]),
+            _ => (line.iter().take(4).take_while(|&&c| c == 0x20).count(), &[]),
+        })
+    }
+
     pub fn delete_selection(&mut self) -> bool {
         if !self.has_selection() {
             return false;
@@ -1448,5 +1552,50 @@ mod tests {
         assert_eq!((e.text_string().as_str(), e.selection()), ("ababc", (2, 4)));
         assert!(e.undo());
         assert_eq!(e.text_string(), "abc");
+    }
+
+    #[test]
+    fn lines_move_up_and_down_with_their_selection() {
+        let mut e = editor("eins\nzwei\ndrei");
+        e.set_caret(7, false); // "zw|ei"
+        assert!(e.move_selected_lines(true));
+        assert_eq!((e.text_string().as_str(), e.caret), ("zwei\neins\ndrei", 2));
+        assert!(!e.move_selected_lines(true)); // already at the top
+        e.select_range(0, 10); // "zwei\neins\n": the third line is not part of it
+        assert!(e.move_selected_lines(false));
+        assert_eq!((e.text_string().as_str(), e.selection()), ("drei\nzwei\neins", (5, 15)));
+        assert!(e.undo());
+        assert_eq!(e.text_string(), "zwei\neins\ndrei");
+    }
+
+    #[test]
+    fn delete_lines_takes_the_line_break_along() {
+        let mut e = editor("eins\nzwei\ndrei");
+        e.set_caret(6, false);
+        assert!(e.delete_lines());
+        assert_eq!((e.text_string().as_str(), e.caret), ("eins\ndrei", 5));
+        e.set_caret(7, false); // the last line takes the break in front of it
+        assert!(e.delete_lines());
+        assert_eq!((e.text_string().as_str(), e.caret), ("eins", 0));
+        assert!(e.delete_lines());
+        assert_eq!(e.text_string(), "");
+        assert!(!e.delete_lines());
+    }
+
+    #[test]
+    fn tab_indents_and_shift_tab_outdents_selected_lines() {
+        let mut e = editor("- a\n\n- b\nc");
+        e.select_range(0, 9); // up to the start of "c"
+        assert!(e.indent());
+        assert_eq!((e.text_string().as_str(), e.selection()), ("\t- a\n\n\t- b\nc", (0, 11)));
+        assert!(e.outdent());
+        assert_eq!((e.text_string().as_str(), e.selection()), ("- a\n\n- b\nc", (0, 9)));
+        let mut e = editor("      x");
+        e.set_caret(7, false);
+        assert!(e.outdent()); // four of the six spaces
+        assert_eq!((e.text_string().as_str(), e.caret), ("  x", 3));
+        let mut e = editor("ab");
+        e.select_range(0, 1);
+        assert!(!e.indent()); // within one line Tab stays a normal tab
     }
 }

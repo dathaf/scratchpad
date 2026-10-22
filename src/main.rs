@@ -110,8 +110,8 @@ const ID_FONT_PICK: usize = 197;
 const ID_AUTO_PAIRS: usize = 198;
 const MENU_CLASS: PCWSTR = w!("ScratchpadMenu");
 /// Shown in the Info card; the "p" stands for performance. Cargo.toml carries the same
-/// number without the letter (2.0.0), because Cargo does not accept a suffix like this.
-const VERSION: &str = "2.0p";
+/// number without the letter (2.1.0), because Cargo does not accept a suffix like this.
+const VERSION: &str = "2.1p";
 
 const THEMES: [&str; 3] = ["Auto", "Light", "Dark"];
 const MATERIALS: [&str; 3] = ["Acrylic", "Mica", "Glass"];
@@ -1491,8 +1491,11 @@ impl App {
                 self.editor.enter(self.settings.markdown);
                 edited = true;
             }
+            VK_TAB if !ctrl && shift => edited = self.editor.outdent(),
             VK_TAB if !ctrl => {
-                self.editor.insert(&[9], Edit::Type);
+                if !self.editor.indent() {
+                    self.editor.insert(&[9], Edit::Type);
+                }
                 edited = true;
             }
             VK_ESCAPE => {
@@ -1521,6 +1524,7 @@ impl App {
                     self.editor.duplicate();
                     edited = true;
                 }
+                0x4B if shift => edited = self.editor.delete_lines(),
                 0x41 => self.editor.select_all(),
                 0x43 => self.copy(),
                 0x58 => {
@@ -1992,6 +1996,11 @@ impl App {
                 } else if wparam.0 as u32 == VK_F4.0 as u32 {
                     // No system menu any more, so Alt+F4 is handled here: hide like the close button.
                     self.cmds.push(Cmd::Hide);
+                } else if matches!(VIRTUAL_KEY(wparam.0 as u16), VK_UP | VK_DOWN) && self.menu.is_none() && self.search.is_none() && !self.info_open {
+                    // Alt+Up / Alt+Down move the selected lines.
+                    if self.editor.move_selected_lines(wparam.0 as u16 == VK_UP.0) {
+                        self.after_edit();
+                    }
                 } else {
                     return None;
                 }
